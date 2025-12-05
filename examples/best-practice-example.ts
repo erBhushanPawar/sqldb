@@ -1,4 +1,4 @@
-import { createPool, MariaDBCache } from './index';
+import { createPool, MariaDBCache } from '../src/index';
 
 /**
  * Best Practice Example for MariaDB Cache

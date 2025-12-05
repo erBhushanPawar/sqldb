@@ -1,4 +1,4 @@
-import { createSmartDB } from '../index';
+import { createSmartDB } from '../src/smart-cache/index';
 
 async function basicUsageExample() {
   // Initialize the smart cache client
