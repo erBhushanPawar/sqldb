@@ -1,4 +1,4 @@
-import { CacheKeyBuilder } from '../../../src/smart-cache/cache/cache-key-builder';
+import { CacheKeyBuilder } from '../../../src/cache/cache-key-builder';
 
 describe('CacheKeyBuilder', () => {
   let builder: CacheKeyBuilder;

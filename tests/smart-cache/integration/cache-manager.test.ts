@@ -1,9 +1,9 @@
-import { CacheManager } from '../../../src/smart-cache/cache/cache-manager';
-import { RedisConnectionManager } from '../../../src/smart-cache/connection/redis';
-import { DEFAULT_CACHE_CONFIG } from '../../../src/smart-cache/types/config';
+import { CacheManager } from '../../../src/cache/cache-manager';
+import { RedisConnectionManager } from '../../../src/connection/redis';
+import { DEFAULT_CACHE_CONFIG } from '../../../src/types/config';
 
 // Mock Redis
-jest.mock('../../../src/smart-cache/connection/redis');
+jest.mock('../../../src/connection/redis');
 
 describe('CacheManager Integration', () => {
   let cacheManager: CacheManager;

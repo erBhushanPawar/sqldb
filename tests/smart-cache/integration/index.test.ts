@@ -1,12 +1,12 @@
-import { createSmartDB, SmartDBClient } from '../../../src/smart-cache/index';
-import * as smartCacheExports from '../../../src/smart-cache/index';
+import { createSmartDB, SmartDBClient } from '../../../src/index';
+import * as smartCacheExports from '../../../src/index';
 
 // Mock all dependencies
-jest.mock('../../../src/smart-cache/client');
-jest.mock('../../../src/smart-cache/connection/mariadb');
-jest.mock('../../../src/smart-cache/connection/redis');
-jest.mock('../../../src/smart-cache/discovery/schema-reader');
-jest.mock('../../../src/smart-cache/discovery/relationship-parser');
+jest.mock('../../../src/client');
+jest.mock('../../../src/connection/mariadb');
+jest.mock('../../../src/connection/redis');
+jest.mock('../../../src/discovery/schema-reader');
+jest.mock('../../../src/discovery/relationship-parser');
 
 describe('Smart Cache Index Exports', () => {
   beforeEach(() => {

@@ -1,5 +1,5 @@
-import { MariaDBConnectionManager } from '../../../src/smart-cache/connection/mariadb';
-import { RedisConnectionManager } from '../../../src/smart-cache/connection/redis';
+import { MariaDBConnectionManager } from '../../../src/connection/mariadb';
+import { RedisConnectionManager } from '../../../src/connection/redis';
 import * as mariadb from 'mariadb';
 import Redis from 'ioredis';
 

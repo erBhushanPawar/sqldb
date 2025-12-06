@@ -1,9 +1,9 @@
-import { TableProxyFactory, createTableProxy } from '../../../src/smart-cache/query/table-proxy';
-import { SmartDBClient } from '../../../src/smart-cache/client';
-import { TableOperations } from '../../../src/smart-cache/types/query';
+import { TableProxyFactory, createTableProxy } from '../../../src/query/table-proxy';
+import { SmartDBClient } from '../../../src/client';
+import { TableOperations } from '../../../src/types/query';
 
 // Mock SmartDBClient
-jest.mock('../../../src/smart-cache/client');
+jest.mock('../../../src/client');
 
 describe('Table Proxy Integration', () => {
   let mockClient: jest.Mocked<SmartDBClient>;

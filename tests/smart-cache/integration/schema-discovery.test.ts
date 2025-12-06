@@ -1,10 +1,10 @@
-import { SchemaReader } from '../../../src/smart-cache/discovery/schema-reader';
-import { RelationshipParser } from '../../../src/smart-cache/discovery/relationship-parser';
-import { MariaDBConnectionManager } from '../../../src/smart-cache/connection/mariadb';
-import { DEFAULT_DISCOVERY_CONFIG } from '../../../src/smart-cache/types/config';
+import { SchemaReader } from '../../../src/discovery/schema-reader';
+import { RelationshipParser } from '../../../src/discovery/relationship-parser';
+import { MariaDBConnectionManager } from '../../../src/connection/mariadb';
+import { DEFAULT_DISCOVERY_CONFIG } from '../../../src/types/config';
 
 // Mock MariaDBConnectionManager
-jest.mock('../../../src/smart-cache/connection/mariadb');
+jest.mock('../../../src/connection/mariadb');
 
 describe('Schema Discovery Integration', () => {
   let mockDbManager: jest.Mocked<MariaDBConnectionManager>;

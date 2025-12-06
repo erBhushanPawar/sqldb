@@ -1,16 +1,16 @@
-import { SmartDBClient } from '../../../src/smart-cache/client';
-import { SmartDBConfig } from '../../../src/smart-cache/types/config';
+import { SmartDBClient } from '../../../src/client';
+import { SmartDBConfig } from '../../../src/types/config';
 
 // Mock all dependencies
-jest.mock('../../../src/smart-cache/connection/mariadb');
-jest.mock('../../../src/smart-cache/connection/redis');
-jest.mock('../../../src/smart-cache/discovery/schema-reader');
-jest.mock('../../../src/smart-cache/discovery/relationship-parser');
+jest.mock('../../../src/connection/mariadb');
+jest.mock('../../../src/connection/redis');
+jest.mock('../../../src/discovery/schema-reader');
+jest.mock('../../../src/discovery/relationship-parser');
 
-import { MariaDBConnectionManager } from '../../../src/smart-cache/connection/mariadb';
-import { RedisConnectionManager } from '../../../src/smart-cache/connection/redis';
-import { SchemaReader } from '../../../src/smart-cache/discovery/schema-reader';
-import { RelationshipParser } from '../../../src/smart-cache/discovery/relationship-parser';
+import { MariaDBConnectionManager } from '../../../src/connection/mariadb';
+import { RedisConnectionManager } from '../../../src/connection/redis';
+import { SchemaReader } from '../../../src/discovery/schema-reader';
+import { RelationshipParser } from '../../../src/discovery/relationship-parser';
 
 describe('SmartDBClient Integration', () => {
   let config: SmartDBConfig;

@@ -1,11 +1,11 @@
-import { InvalidationManager } from '../../../src/smart-cache/cache/invalidation';
-import { CacheManager } from '../../../src/smart-cache/cache/cache-manager';
-import { DependencyGraph } from '../../../src/smart-cache/discovery/dependency-graph';
-import { InvalidationStrategy } from '../../../src/smart-cache/types/cache';
-import { TableRelationship } from '../../../src/smart-cache/types/schema';
+import { InvalidationManager } from '../../../src/cache/invalidation';
+import { CacheManager } from '../../../src/cache/cache-manager';
+import { DependencyGraph } from '../../../src/discovery/dependency-graph';
+import { InvalidationStrategy } from '../../../src/types/cache';
+import { TableRelationship } from '../../../src/types/schema';
 
 // Mock CacheManager
-jest.mock('../../../src/smart-cache/cache/cache-manager');
+jest.mock('../../../src/cache/cache-manager');
 
 describe('InvalidationManager Integration', () => {
   let invalidationManager: InvalidationManager;

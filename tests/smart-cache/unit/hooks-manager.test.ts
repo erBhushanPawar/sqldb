@@ -1,4 +1,4 @@
-import { HooksManager } from '../../../src/smart-cache/hooks/hooks-manager';
+import { HooksManager } from '../../../src/hooks/hooks-manager';
 
 describe('HooksManager', () => {
   let hooksManager: HooksManager;

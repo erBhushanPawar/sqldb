@@ -1,14 +1,14 @@
-import { TableOperationsImpl } from '../../../src/smart-cache/query/operations';
-import { MariaDBConnectionManager } from '../../../src/smart-cache/connection/mariadb';
-import { CacheManager } from '../../../src/smart-cache/cache/cache-manager';
-import { InvalidationManager } from '../../../src/smart-cache/cache/invalidation';
-import { QueryBuilder } from '../../../src/smart-cache/query/query-builder';
-import { DEFAULT_CACHE_CONFIG } from '../../../src/smart-cache/types/config';
+import { TableOperationsImpl } from '../../../src/query/operations';
+import { MariaDBConnectionManager } from '../../../src/connection/mariadb';
+import { CacheManager } from '../../../src/cache/cache-manager';
+import { InvalidationManager } from '../../../src/cache/invalidation';
+import { QueryBuilder } from '../../../src/query/query-builder';
+import { DEFAULT_CACHE_CONFIG } from '../../../src/types/config';
 
 // Mock dependencies
-jest.mock('../../../src/smart-cache/connection/mariadb');
-jest.mock('../../../src/smart-cache/cache/cache-manager');
-jest.mock('../../../src/smart-cache/cache/invalidation');
+jest.mock('../../../src/connection/mariadb');
+jest.mock('../../../src/cache/cache-manager');
+jest.mock('../../../src/cache/invalidation');
 
 describe('TableOperations Integration', () => {
   let operations: TableOperationsImpl;

@@ -1,4 +1,4 @@
-import { createSmartDB } from '../src/smart-cache/index';
+import { createSmartDB } from '../src/index';
 
 async function relationshipsExample() {
   const db = await createSmartDB({

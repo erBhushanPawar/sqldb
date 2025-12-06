@@ -1,5 +1,5 @@
-import { DependencyGraph } from '../../../src/smart-cache/discovery/dependency-graph';
-import { TableRelationship } from '../../../src/smart-cache/types/schema';
+import { DependencyGraph } from '../../../src/discovery/dependency-graph';
+import { TableRelationship } from '../../../src/types/schema';
 
 describe('DependencyGraph', () => {
   let graph: DependencyGraph;

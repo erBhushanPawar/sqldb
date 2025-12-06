@@ -1,4 +1,4 @@
-import { RedisConnectionManager } from '../../../src/smart-cache/connection/redis';
+import { RedisConnectionManager } from '../../../src/connection/redis';
 import Redis from 'ioredis';
 
 // Mock ioredis

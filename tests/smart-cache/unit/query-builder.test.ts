@@ -1,4 +1,4 @@
-import { QueryBuilder } from '../../../src/smart-cache/query/query-builder';
+import { QueryBuilder } from '../../../src/query/query-builder';
 
 describe('QueryBuilder', () => {
   let builder: QueryBuilder;
