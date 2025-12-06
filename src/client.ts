@@ -5,6 +5,7 @@ import {
   DEFAULT_LOGGING_CONFIG,
 } from './types/config';
 import { TableOperations, QueryMetadata } from './types/query';
+import { TableSchema } from './types/schema';
 import { MariaDBConnectionManager } from './connection/mariadb';
 import { RedisConnectionManager } from './connection/redis';
 import { SchemaReader } from './discovery/schema-reader';
@@ -32,6 +33,7 @@ export class SmartDBClient {
 
   private initialized: boolean = false;
   private discoveredTables: Set<string> = new Set();
+  private tableSchemas: Map<string, TableSchema> = new Map();
 
   constructor(config: SmartDBConfig) {
     this.config = {
@@ -128,6 +130,7 @@ export class SmartDBClient {
 
     for (const table of tables) {
       this.discoveredTables.add(table.tableName);
+      this.tableSchemas.set(table.tableName, table);
     }
 
     // Discover relationships
@@ -145,6 +148,7 @@ export class SmartDBClient {
     this.log('info', 'Refreshing database schema...');
 
     this.discoveredTables.clear();
+    this.tableSchemas.clear();
     this.dependencyGraph.clear();
 
     await this.discoverSchema();
@@ -183,6 +187,10 @@ export class SmartDBClient {
 
   getDiscoveredTables(): string[] {
     return Array.from(this.discoveredTables);
+  }
+
+  getTableSchema(tableName: string): TableSchema | undefined {
+    return this.tableSchemas.get(tableName);
   }
 
   getQueries(correlationId?: string): QueryMetadata[] {
