@@ -13,34 +13,55 @@ export interface FindOptions {
   orderBy?: string | OrderByOption | OrderByOption[];
   select?: string[];
   skipCache?: boolean;
+  correlationId?: string;
 }
 
 export interface TableOperations<T = any> {
   // Read operations (cache-first)
-  findOne(where: WhereClause<T>): Promise<T | null>;
+  findOne(where: WhereClause<T>, options?: FindOptions): Promise<T | null>;
   findMany(where?: WhereClause<T>, options?: FindOptions): Promise<T[]>;
-  findById(id: string | number): Promise<T | null>;
-  count(where?: WhereClause<T>): Promise<number>;
+  findById(id: string | number, correlationId?: string): Promise<T | null>;
+  count(where?: WhereClause<T>, correlationId?: string): Promise<number>;
 
   // Write operations (invalidate cache)
-  insertOne(data: Omit<T, 'id'>): Promise<T>;
-  insertMany(data: Omit<T, 'id'>[]): Promise<T[]>;
-  updateOne(where: WhereClause<T>, data: Partial<T>): Promise<T | null>;
-  updateMany(where: WhereClause<T>, data: Partial<T>): Promise<number>;
-  updateById(id: string | number, data: Partial<T>): Promise<T | null>;
-  deleteOne(where: WhereClause<T>): Promise<boolean>;
-  deleteMany(where: WhereClause<T>): Promise<number>;
-  deleteById(id: string | number): Promise<boolean>;
+  insertOne(data: Omit<T, 'id'>, correlationId?: string): Promise<T>;
+  insertMany(data: Omit<T, 'id'>[], correlationId?: string): Promise<T[]>;
+  updateOne(where: WhereClause<T>, data: Partial<T>, correlationId?: string): Promise<T | null>;
+  updateMany(where: WhereClause<T>, data: Partial<T>, correlationId?: string): Promise<number>;
+  updateById(id: string | number, data: Partial<T>, correlationId?: string): Promise<T | null>;
+  deleteOne(where: WhereClause<T>, correlationId?: string): Promise<boolean>;
+  deleteMany(where: WhereClause<T>, correlationId?: string): Promise<number>;
+  deleteById(id: string | number, correlationId?: string): Promise<boolean>;
 
   // Direct DB access (bypass cache)
-  raw<R = any>(sql: string, params?: any[]): Promise<R>;
+  raw<R = any>(sql: string, params?: any[], correlationId?: string): Promise<R>;
 
   // Cache control
   invalidateCache(): Promise<void>;
-  warmCache(where?: WhereClause<T>): Promise<void>;
+  warmCache(where?: WhereClause<T>, correlationId?: string): Promise<void>;
 }
 
 export interface QueryResult {
   sql: string;
   params: any[];
+}
+
+export interface QueryMetadata {
+  queryId: string;
+  correlationId?: string;
+  sql: string;
+  params?: any[];
+  startTime: number;
+  endTime?: number;
+  executionTimeMs?: number;
+  resultCount?: number;
+  tableName?: string;
+  operation?: string;
+  error?: string;
+}
+
+export interface QueryTracker {
+  trackQuery(metadata: QueryMetadata): void;
+  getQueries(correlationId?: string): QueryMetadata[];
+  clearQueries(correlationId?: string): void;
 }

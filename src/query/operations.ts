@@ -29,14 +29,15 @@ export class TableOperationsImpl<T = any> implements TableOperations<T> {
     this.cacheConfig = cacheConfig;
   }
 
-  async findOne(where: WhereClause<T>): Promise<T | null> {
-    const options: FindOptions = { limit: 1 };
-    const results = await this.findMany(where, options);
+  async findOne(where: WhereClause<T>, options?: FindOptions): Promise<T | null> {
+    const mergedOptions: FindOptions = { ...options, limit: 1 };
+    const results = await this.findMany(where, mergedOptions);
     return results.length > 0 ? results[0] : null;
   }
 
   async findMany(where?: WhereClause<T>, options?: FindOptions): Promise<T[]> {
     const skipCache = options?.skipCache || false;
+    const correlationId = options?.correlationId;
 
     // Build cache key
     const cacheKey = this.cacheManager
@@ -58,7 +59,7 @@ export class TableOperationsImpl<T = any> implements TableOperations<T> {
       options
     );
 
-    const results = await this.dbManager.query<T[]>(sql, params);
+    const results = await this.dbManager.query<T[]>(sql, params, correlationId);
 
     // Cache results
     if (!skipCache && this.cacheManager.isEnabled()) {
@@ -68,7 +69,7 @@ export class TableOperationsImpl<T = any> implements TableOperations<T> {
     return results;
   }
 
-  async findById(id: string | number): Promise<T | null> {
+  async findById(id: string | number, correlationId?: string): Promise<T | null> {
     const cacheKey = this.cacheManager
       .getKeyBuilder()
       .buildIdKey(this.tableName, id);
@@ -83,7 +84,7 @@ export class TableOperationsImpl<T = any> implements TableOperations<T> {
 
     // Query database
     const { sql, params } = this.queryBuilder.buildSelectById(this.tableName, id);
-    const results = await this.dbManager.query<T[]>(sql, params);
+    const results = await this.dbManager.query<T[]>(sql, params, correlationId);
 
     const result = results.length > 0 ? results[0] : null;
 
@@ -95,7 +96,7 @@ export class TableOperationsImpl<T = any> implements TableOperations<T> {
     return result;
   }
 
-  async count(where?: WhereClause<T>): Promise<number> {
+  async count(where?: WhereClause<T>, correlationId?: string): Promise<number> {
     const cacheKey = this.cacheManager
       .getKeyBuilder()
       .buildKey(this.tableName, 'count', { where });
@@ -110,7 +111,7 @@ export class TableOperationsImpl<T = any> implements TableOperations<T> {
 
     // Query database
     const { sql, params } = this.queryBuilder.buildCount(this.tableName, where);
-    const results = await this.dbManager.query<any[]>(sql, params);
+    const results = await this.dbManager.query<any[]>(sql, params, correlationId);
 
     const count = results[0]?.count || 0;
 
@@ -123,9 +124,9 @@ export class TableOperationsImpl<T = any> implements TableOperations<T> {
     return count;
   }
 
-  async insertOne(data: Omit<T, 'id'>): Promise<T> {
+  async insertOne(data: Omit<T, 'id'>, correlationId?: string): Promise<T> {
     const { sql, params } = this.queryBuilder.buildInsert(this.tableName, data);
-    const result: any = await this.dbManager.query(sql, params);
+    const result: any = await this.dbManager.query(sql, params, correlationId);
 
     // Invalidate cache
     if (this.cacheConfig.invalidateOnWrite) {
@@ -140,7 +141,7 @@ export class TableOperationsImpl<T = any> implements TableOperations<T> {
     return { ...data, id: insertedId } as T;
   }
 
-  async insertMany(dataArray: Omit<T, 'id'>[]): Promise<T[]> {
+  async insertMany(dataArray: Omit<T, 'id'>[], correlationId?: string): Promise<T[]> {
     if (dataArray.length === 0) {
       return [];
     }
@@ -149,7 +150,7 @@ export class TableOperationsImpl<T = any> implements TableOperations<T> {
       this.tableName,
       dataArray
     );
-    const result: any = await this.dbManager.query(sql, params);
+    const result: any = await this.dbManager.query(sql, params, correlationId);
 
     // Invalidate cache
     if (this.cacheConfig.invalidateOnWrite) {
@@ -167,14 +168,14 @@ export class TableOperationsImpl<T = any> implements TableOperations<T> {
     })) as T[];
   }
 
-  async updateOne(where: WhereClause<T>, data: Partial<T>): Promise<T | null> {
+  async updateOne(where: WhereClause<T>, data: Partial<T>, correlationId?: string): Promise<T | null> {
     const { sql, params } = this.queryBuilder.buildUpdate(
       this.tableName,
       where,
       data
     );
 
-    const result: any = await this.dbManager.query(sql, params);
+    const result: any = await this.dbManager.query(sql, params, correlationId);
 
     // Invalidate cache
     if (this.cacheConfig.invalidateOnWrite) {
@@ -186,20 +187,20 @@ export class TableOperationsImpl<T = any> implements TableOperations<T> {
 
     // Fetch and return the updated record
     if (result.affectedRows > 0) {
-      return await this.findOne(where);
+      return await this.findOne(where, { correlationId });
     }
 
     return null;
   }
 
-  async updateMany(where: WhereClause<T>, data: Partial<T>): Promise<number> {
+  async updateMany(where: WhereClause<T>, data: Partial<T>, correlationId?: string): Promise<number> {
     const { sql, params } = this.queryBuilder.buildUpdate(
       this.tableName,
       where,
       data
     );
 
-    const result: any = await this.dbManager.query(sql, params);
+    const result: any = await this.dbManager.query(sql, params, correlationId);
 
     // Invalidate cache
     if (this.cacheConfig.invalidateOnWrite) {
@@ -212,14 +213,14 @@ export class TableOperationsImpl<T = any> implements TableOperations<T> {
     return result.affectedRows || 0;
   }
 
-  async updateById(id: string | number, data: Partial<T>): Promise<T | null> {
+  async updateById(id: string | number, data: Partial<T>, correlationId?: string): Promise<T | null> {
     const { sql, params } = this.queryBuilder.buildUpdateById(
       this.tableName,
       id,
       data
     );
 
-    const result: any = await this.dbManager.query(sql, params);
+    const result: any = await this.dbManager.query(sql, params, correlationId);
 
     // Invalidate cache
     if (this.cacheConfig.invalidateOnWrite) {
@@ -231,15 +232,15 @@ export class TableOperationsImpl<T = any> implements TableOperations<T> {
 
     // Fetch and return the updated record
     if (result.affectedRows > 0) {
-      return await this.findById(id);
+      return await this.findById(id, correlationId);
     }
 
     return null;
   }
 
-  async deleteOne(where: WhereClause<T>): Promise<boolean> {
+  async deleteOne(where: WhereClause<T>, correlationId?: string): Promise<boolean> {
     const { sql, params } = this.queryBuilder.buildDelete(this.tableName, where);
-    const result: any = await this.dbManager.query(sql, params);
+    const result: any = await this.dbManager.query(sql, params, correlationId);
 
     // Invalidate cache
     if (this.cacheConfig.invalidateOnWrite) {
@@ -252,9 +253,9 @@ export class TableOperationsImpl<T = any> implements TableOperations<T> {
     return (result.affectedRows || 0) > 0;
   }
 
-  async deleteMany(where: WhereClause<T>): Promise<number> {
+  async deleteMany(where: WhereClause<T>, correlationId?: string): Promise<number> {
     const { sql, params } = this.queryBuilder.buildDelete(this.tableName, where);
-    const result: any = await this.dbManager.query(sql, params);
+    const result: any = await this.dbManager.query(sql, params, correlationId);
 
     // Invalidate cache
     if (this.cacheConfig.invalidateOnWrite) {
@@ -267,9 +268,9 @@ export class TableOperationsImpl<T = any> implements TableOperations<T> {
     return result.affectedRows || 0;
   }
 
-  async deleteById(id: string | number): Promise<boolean> {
+  async deleteById(id: string | number, correlationId?: string): Promise<boolean> {
     const { sql, params } = this.queryBuilder.buildDeleteById(this.tableName, id);
-    const result: any = await this.dbManager.query(sql, params);
+    const result: any = await this.dbManager.query(sql, params, correlationId);
 
     // Invalidate cache
     if (this.cacheConfig.invalidateOnWrite) {
@@ -282,8 +283,28 @@ export class TableOperationsImpl<T = any> implements TableOperations<T> {
     return (result.affectedRows || 0) > 0;
   }
 
-  async raw<R = any>(sql: string, params?: any[]): Promise<R> {
-    return await this.dbManager.query<R>(sql, params);
+  async raw<R = any>(sql: string, params?: any[], correlationId?: string): Promise<R> {
+    const cacheKey = this.cacheManager
+      .getKeyBuilder()
+      .buildKey(this.tableName, 'raw', { sql, params });
+
+    // Try cache first
+    if (this.cacheManager.isEnabled()) {
+      const cached = await this.cacheManager.get<R>(cacheKey);
+      if (cached !== null) {
+        return cached;
+      }
+    }
+
+    // Query database
+    const result = await this.dbManager.query<R>(sql, params, correlationId);
+
+    // Cache with 1-minute TTL
+    if (this.cacheManager.isEnabled()) {
+      await this.cacheManager.set(cacheKey, result, 60);
+    }
+
+    return result;
   }
 
   async invalidateCache(): Promise<void> {
@@ -292,8 +313,8 @@ export class TableOperationsImpl<T = any> implements TableOperations<T> {
     });
   }
 
-  async warmCache(where?: WhereClause<T>): Promise<void> {
+  async warmCache(where?: WhereClause<T>, correlationId?: string): Promise<void> {
     // Pre-fetch and cache common queries
-    await this.findMany(where);
+    await this.findMany(where, { correlationId });
   }
 }

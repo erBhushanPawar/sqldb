@@ -4,7 +4,7 @@ import {
   DEFAULT_DISCOVERY_CONFIG,
   DEFAULT_LOGGING_CONFIG,
 } from './types/config';
-import { TableOperations } from './types/query';
+import { TableOperations, QueryMetadata } from './types/query';
 import { MariaDBConnectionManager } from './connection/mariadb';
 import { RedisConnectionManager } from './connection/redis';
 import { SchemaReader } from './discovery/schema-reader';
@@ -16,6 +16,7 @@ import { QueryBuilder } from './query/query-builder';
 import { TableOperationsImpl } from './query/operations';
 import { TableProxyFactory } from './query/table-proxy';
 import { HooksManager } from './hooks/hooks-manager';
+import { InMemoryQueryTracker } from './query/query-tracker';
 
 export class SmartDBClient {
   private config: SmartDBConfig;
@@ -27,6 +28,7 @@ export class SmartDBClient {
   private queryBuilder!: QueryBuilder;
   private tableProxyFactory!: TableProxyFactory;
   public hooks!: HooksManager;
+  public queryTracker: InMemoryQueryTracker;
 
   private initialized: boolean = false;
   private discoveredTables: Set<string> = new Set();
@@ -38,6 +40,7 @@ export class SmartDBClient {
       discovery: { ...DEFAULT_DISCOVERY_CONFIG, ...config.discovery },
       logging: { ...DEFAULT_LOGGING_CONFIG, ...config.logging },
     };
+    this.queryTracker = new InMemoryQueryTracker();
   }
 
   async initialize(): Promise<void> {
@@ -48,7 +51,7 @@ export class SmartDBClient {
     this.log('info', 'Initializing SmartDBClient...');
 
     // Initialize connection managers
-    this.dbManager = new MariaDBConnectionManager(this.config.mariadb);
+    this.dbManager = new MariaDBConnectionManager(this.config.mariadb, this.queryTracker);
     await this.dbManager.connect();
     this.log('info', 'MariaDB connected');
 
@@ -180,6 +183,14 @@ export class SmartDBClient {
 
   getDiscoveredTables(): string[] {
     return Array.from(this.discoveredTables);
+  }
+
+  getQueries(correlationId?: string): QueryMetadata[] {
+    return this.queryTracker.getQueries(correlationId);
+  }
+
+  clearQueries(correlationId?: string): void {
+    this.queryTracker.clearQueries(correlationId);
   }
 
   async healthCheck(): Promise<{

@@ -1,12 +1,20 @@
 import * as mariadb from 'mariadb';
 import { MariaDBConfig } from '../types/config';
+import { QueryTracker, QueryMetadata } from '../types/query';
+import { generateQueryId } from '../query/query-tracker';
 
 export class MariaDBConnectionManager {
   private pool: mariadb.Pool | null = null;
   private config: MariaDBConfig;
+  private queryTracker?: QueryTracker;
 
-  constructor(config: MariaDBConfig) {
+  constructor(config: MariaDBConfig, queryTracker?: QueryTracker) {
     this.config = config;
+    this.queryTracker = queryTracker;
+  }
+
+  setQueryTracker(tracker: QueryTracker): void {
+    this.queryTracker = tracker;
   }
 
   async connect(): Promise<mariadb.Pool> {
@@ -28,9 +36,48 @@ export class MariaDBConnectionManager {
     return pool.getConnection();
   }
 
-  async query<T = any>(sql: string, params?: any[]): Promise<T> {
+  async query<T = any>(
+    sql: string,
+    params?: any[],
+    correlationId?: string
+  ): Promise<T> {
     const pool = await this.connect();
-    return pool.query(sql, params);
+    const queryId = generateQueryId();
+    const startTime = Date.now();
+
+    const metadata: QueryMetadata = {
+      queryId,
+      correlationId,
+      sql,
+      params,
+      startTime,
+    };
+
+    try {
+      const result = await pool.query(sql, params);
+      const endTime = Date.now();
+
+      metadata.endTime = endTime;
+      metadata.executionTimeMs = endTime - startTime;
+      metadata.resultCount = Array.isArray(result) ? result.length : 1;
+
+      if (this.queryTracker) {
+        this.queryTracker.trackQuery(metadata);
+      }
+
+      return result;
+    } catch (error) {
+      const endTime = Date.now();
+      metadata.endTime = endTime;
+      metadata.executionTimeMs = endTime - startTime;
+      metadata.error = error instanceof Error ? error.message : String(error);
+
+      if (this.queryTracker) {
+        this.queryTracker.trackQuery(metadata);
+      }
+
+      throw error;
+    }
   }
 
   async healthCheck(): Promise<boolean> {

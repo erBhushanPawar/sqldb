@@ -24,6 +24,7 @@ export { InvalidationManager } from './cache/invalidation';
 export { DependencyGraph } from './discovery/dependency-graph';
 export { HooksManager } from './hooks/hooks-manager';
 export { QueryBuilder } from './query/query-builder';
+export { InMemoryQueryTracker, generateQueryId } from './query/query-tracker';
 
 // Default export
 export default {
