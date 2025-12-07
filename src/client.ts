@@ -96,23 +96,6 @@ export class SmartDBClient {
 
     this.initialized = true;
     this.log('info', 'SmartDBClient initialized successfully');
-
-    // Create dynamic table accessors using Proxy
-    return new Proxy(this, {
-      get(target, prop: string) {
-        // If prop exists on target, return it
-        if (prop in target) {
-          return (target as any)[prop];
-        }
-
-        // Otherwise, treat it as a table name
-        if (typeof prop === 'string' && !prop.startsWith('_')) {
-          return target.getTableOperations(prop);
-        }
-
-        return undefined;
-      },
-    }) as any;
   }
 
   private async discoverSchema(): Promise<void> {
@@ -214,6 +197,25 @@ export class SmartDBClient {
       redis: redisHealthy,
       overall: mariadbHealthy && redisHealthy,
     };
+  }
+
+  /**
+   * Generate TypeScript interface from database schema
+   */
+  generateSchema(options?: {
+    interfaceName?: string;
+    includeComments?: boolean;
+    nullableFields?: boolean;
+    withExample?: boolean;
+  }): string {
+    const { SchemaGenerator } = require('./cli/schema-generator');
+    const generator = new SchemaGenerator(this);
+
+    if (options?.withExample) {
+      return generator.generateWithExample(options);
+    }
+
+    return generator.generateCompleteSchema(options);
   }
 
   async close(): Promise<void> {

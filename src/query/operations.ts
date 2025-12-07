@@ -139,12 +139,12 @@ export class TableOperationsImpl<T = any> implements TableOperations<T> {
     const { sql, params } = this.queryBuilder.buildInsert(this.tableName, data);
     const result: any = await this.dbManager.query(sql, params, correlationId);
 
-    // Invalidate cache
+    // Invalidate cache (non-blocking fire-and-forget)
     if (this.cacheConfig.invalidateOnWrite) {
-      await this.invalidationManager.invalidateTable(
+      this.invalidationManager.invalidateTable(
         this.tableName,
         { cascade: this.cacheConfig.cascadeInvalidation }
-      );
+      ).catch(err => console.error('[InsertOne] Cache invalidation error:', err));
     }
 
     // Return the inserted record with ID
@@ -163,12 +163,12 @@ export class TableOperationsImpl<T = any> implements TableOperations<T> {
     );
     const result: any = await this.dbManager.query(sql, params, correlationId);
 
-    // Invalidate cache
+    // Invalidate cache (non-blocking fire-and-forget)
     if (this.cacheConfig.invalidateOnWrite) {
-      await this.invalidationManager.invalidateTable(
+      this.invalidationManager.invalidateTable(
         this.tableName,
         { cascade: this.cacheConfig.cascadeInvalidation }
-      );
+      ).catch(err => console.error('[InsertMany] Cache invalidation error:', err));
     }
 
     // Return inserted records with IDs
@@ -188,17 +188,18 @@ export class TableOperationsImpl<T = any> implements TableOperations<T> {
 
     const result: any = await this.dbManager.query(sql, params, correlationId);
 
-    // Invalidate cache
+    // Invalidate cache (non-blocking fire-and-forget)
     if (this.cacheConfig.invalidateOnWrite) {
-      await this.invalidationManager.invalidateTable(
+      this.invalidationManager.invalidateTable(
         this.tableName,
         { cascade: this.cacheConfig.cascadeInvalidation }
-      );
+      ).catch(err => console.error('[UpdateOne] Cache invalidation error:', err));
     }
 
-    // Fetch and return the updated record
+    // Return a lightweight object with just the updated fields
+    // This avoids a second SELECT query while still providing useful data
     if (result.affectedRows > 0) {
-      return await this.findOne(where, { correlationId });
+      return data as T;
     }
 
     return null;
@@ -213,12 +214,12 @@ export class TableOperationsImpl<T = any> implements TableOperations<T> {
 
     const result: any = await this.dbManager.query(sql, params, correlationId);
 
-    // Invalidate cache
+    // Invalidate cache (non-blocking fire-and-forget)
     if (this.cacheConfig.invalidateOnWrite) {
-      await this.invalidationManager.invalidateTable(
+      this.invalidationManager.invalidateTable(
         this.tableName,
         { cascade: this.cacheConfig.cascadeInvalidation }
-      );
+      ).catch(err => console.error('[UpdateMany] Cache invalidation error:', err));
     }
 
     return result.affectedRows || 0;
@@ -233,17 +234,18 @@ export class TableOperationsImpl<T = any> implements TableOperations<T> {
 
     const result: any = await this.dbManager.query(sql, params, correlationId);
 
-    // Invalidate cache
+    // Invalidate cache (non-blocking fire-and-forget)
     if (this.cacheConfig.invalidateOnWrite) {
-      await this.invalidationManager.invalidateTable(
+      this.invalidationManager.invalidateTable(
         this.tableName,
         { cascade: this.cacheConfig.cascadeInvalidation }
-      );
+      ).catch(err => console.error('[UpdateById] Cache invalidation error:', err));
     }
 
-    // Fetch and return the updated record
+    // Return a lightweight object with just the updated fields
+    // This avoids a second SELECT query while still providing useful data
     if (result.affectedRows > 0) {
-      return await this.findById(id, correlationId);
+      return { ...data, id } as T;
     }
 
     return null;
@@ -253,12 +255,12 @@ export class TableOperationsImpl<T = any> implements TableOperations<T> {
     const { sql, params } = this.queryBuilder.buildDelete(this.tableName, where);
     const result: any = await this.dbManager.query(sql, params, correlationId);
 
-    // Invalidate cache
+    // Invalidate cache (non-blocking fire-and-forget)
     if (this.cacheConfig.invalidateOnWrite) {
-      await this.invalidationManager.invalidateTable(
+      this.invalidationManager.invalidateTable(
         this.tableName,
         { cascade: this.cacheConfig.cascadeInvalidation }
-      );
+      ).catch(err => console.error('[DeleteOne] Cache invalidation error:', err));
     }
 
     return (result.affectedRows || 0) > 0;
@@ -268,12 +270,12 @@ export class TableOperationsImpl<T = any> implements TableOperations<T> {
     const { sql, params } = this.queryBuilder.buildDelete(this.tableName, where);
     const result: any = await this.dbManager.query(sql, params, correlationId);
 
-    // Invalidate cache
+    // Invalidate cache (non-blocking fire-and-forget)
     if (this.cacheConfig.invalidateOnWrite) {
-      await this.invalidationManager.invalidateTable(
+      this.invalidationManager.invalidateTable(
         this.tableName,
         { cascade: this.cacheConfig.cascadeInvalidation }
-      );
+      ).catch(err => console.error('[DeleteMany] Cache invalidation error:', err));
     }
 
     return result.affectedRows || 0;
@@ -283,12 +285,12 @@ export class TableOperationsImpl<T = any> implements TableOperations<T> {
     const { sql, params } = this.queryBuilder.buildDeleteById(this.tableName, id);
     const result: any = await this.dbManager.query(sql, params, correlationId);
 
-    // Invalidate cache
+    // Invalidate cache (non-blocking fire-and-forget)
     if (this.cacheConfig.invalidateOnWrite) {
-      await this.invalidationManager.invalidateTable(
+      this.invalidationManager.invalidateTable(
         this.tableName,
         { cascade: this.cacheConfig.cascadeInvalidation }
-      );
+      ).catch(err => console.error('[DeleteById] Cache invalidation error:', err));
     }
 
     return (result.affectedRows || 0) > 0;

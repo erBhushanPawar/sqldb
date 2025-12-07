@@ -80,6 +80,57 @@ await users.deleteById(1);
 await db.close();
 ```
 
+### Singleton Pattern (Recommended)
+
+For production applications, use singleton mode to share a single connection pool:
+
+```typescript
+import { createSmartDB, getSmartDB } from '@bhushanpawar/sqldb';
+
+// Initialize once at app startup
+const db = await createSmartDB({
+  mariadb: { /* config */ },
+  redis: { /* config */ },
+  cache: { enabled: true },
+}, { singleton: true }); // Enable singleton mode
+
+// Access anywhere in your app
+import { getSmartDB } from '@bhushanpawar/sqldb';
+
+const db = getSmartDB(); // Returns the same instance
+const users = db.getTableOperations('users');
+```
+
+See [SINGLETON_PATTERN.md](./SINGLETON_PATTERN.md) for detailed usage.
+
+### Dynamic Table Access (TypeScript-Friendly)
+
+Access tables directly as properties with full type safety:
+
+```typescript
+import { createSmartDB, SmartDBWithTables } from '@bhushanpawar/sqldb';
+
+// Define your schema
+interface MySchema {
+  users: { id: number; name: string; email: string };
+  orders: { id: number; user_id: number; total: number };
+}
+
+type MyDB = SmartDBWithTables<MySchema>;
+
+const db = await createSmartDB(config) as MyDB;
+
+// Clean, typed access
+const users = await db.users.findMany();           // Type: MySchema['users'][]
+const order = await db.orders.findById(123);       // Type: MySchema['orders'] | null
+await db.users.updateById(1, { name: 'Jane' });    // Fully type-checked
+
+// Still works the old way too
+const usersTable = db.getTableOperations('users');
+```
+
+See [DYNAMIC_TABLE_ACCESS.md](./DYNAMIC_TABLE_ACCESS.md) for detailed usage.
+
 ### Raw Query Caching
 
 The `raw` method supports caching custom SQL queries with a configurable TTL (default: 1 minute):

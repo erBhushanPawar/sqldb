@@ -78,10 +78,16 @@ export class SchemaReader {
       SELECT
         COLUMN_NAME as columnName,
         DATA_TYPE as dataType,
+        COLUMN_TYPE as columnType,
         IS_NULLABLE as isNullable,
         COLUMN_KEY as columnKey,
         COLUMN_DEFAULT as columnDefault,
-        EXTRA as extra
+        EXTRA as extra,
+        CHARACTER_MAXIMUM_LENGTH as characterMaximumLength,
+        NUMERIC_PRECISION as numericPrecision,
+        NUMERIC_SCALE as numericScale,
+        CHARACTER_SET_NAME as characterSetName,
+        COLLATION_NAME as collationName
       FROM INFORMATION_SCHEMA.COLUMNS
       WHERE TABLE_SCHEMA = ?
       AND TABLE_NAME = ?
@@ -93,10 +99,16 @@ export class SchemaReader {
     return result.map((row: any) => ({
       columnName: row.columnName,
       dataType: row.dataType,
+      columnType: row.columnType,
       isNullable: row.isNullable === 'YES',
       columnKey: row.columnKey || '',
       columnDefault: row.columnDefault,
       extra: row.extra || '',
+      characterMaximumLength: row.characterMaximumLength,
+      numericPrecision: row.numericPrecision,
+      numericScale: row.numericScale,
+      characterSetName: row.characterSetName,
+      collationName: row.collationName,
     }));
   }
 
