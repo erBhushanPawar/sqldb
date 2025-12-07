@@ -1,6 +1,6 @@
 {
   "name": "@bhushanpawar/sqldb",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "description": "An intelligent MariaDB client with Redis-backed caching, automatic schema discovery, relationship mapping, and smart cache invalidation",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
