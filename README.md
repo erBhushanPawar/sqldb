@@ -1,22 +1,20 @@
-<div align="center">
-
 # @bhushanpawar/sqldb
 
-### 🚀 The MariaDB client that makes your database feel like Redis
+> 🚀 **The MariaDB client that makes your database feel like Redis**
 
-**Stop wasting hours on cache invalidation bugs. Stop paying for database CPU you don't need.
-Get 99% cache hit rates and sub-millisecond queries—automatically.**
+Stop wasting hours on cache invalidation bugs. Stop paying for database CPU you don't need. Get **99% cache hit rates** and **sub-millisecond queries**—automatically.
 
-[![npm version](https://img.shields.io/npm/v/@bhushanpawar/sqldb?color=blue&style=for-the-badge)](https://www.npmjs.com/package/@bhushanpawar/sqldb)
-[![TypeScript](https://img.shields.io/badge/TypeScript-100%25-blue?style=for-the-badge&logo=typescript)](https://www.typescriptlang.org/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
+[![npm version](https://img.shields.io/npm/v/@bhushanpawar/sqldb?color=blue&style=flat-square)](https://www.npmjs.com/package/@bhushanpawar/sqldb)
+[![TypeScript](https://img.shields.io/badge/TypeScript-100%25-blue?style=flat-square&logo=typescript)](https://www.typescriptlang.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg?style=flat-square)](https://opensource.org/licenses/MIT)
+
+**[⚡ Quick Start](#getting-started-in-60-seconds)** • **[📖 Docs](#documentation)** • **[🎯 Examples](#examples)** • **[⭐ Star on GitHub](https://github.com/erBhushanPawar/sqldb)**
 
 ---
 
-### 💎 What Makes This Special?
+## 💎 What Makes This Special?
 
-**Most database libraries make you choose:**
-🐌 Simple & slow ORM **OR** ⚡ Fast but complex manual caching
+**Most database libraries make you choose:** 🐌 Simple & slow ORM **OR** ⚡ Fast but complex manual caching
 
 **SmartDB gives you both.**
 
@@ -37,7 +35,7 @@ const users = await db.users.findMany({ status });
 // Cached automatically. Invalidated intelligently. Type-safe. Done.
 ```
 
-### 🎯 The Results Speak for Themselves
+## 🎯 The Results Speak for Themselves
 
 <table>
 <tr>
@@ -70,7 +68,7 @@ Developer happiness:  😍
 </tr>
 </table>
 
-### ⚡ Key Features at a Glance
+## ⚡ Key Features at a Glance
 
 | Feature | What You Get |
 |---------|--------------|
@@ -83,9 +81,7 @@ Developer happiness:  😍
 | 🔗 **Zero Config** | Auto-discovers schema. Maps relationships. Just works. |
 | 🏗️ **Production Ready** | Singleton pattern. Health checks. Graceful shutdown. Connection pooling. |
 
----
-
-### 🎬 See It In Action
+## 🎬 See It In Action
 
 ```typescript
 import { createSmartDB } from '@bhushanpawar/sqldb';
@@ -115,12 +111,6 @@ console.log(stats.hitRate);  // "99.5%"
 ```
 
 **That's it.** No cache keys. No invalidation logic. No stale data bugs at 3am.
-
----
-
-**[⚡ Get Started in 60 Seconds](#getting-started-in-60-seconds)** • **[📖 Read the Docs](#documentation)** • **[🎯 See Examples](#examples)** • **[⭐ Star on GitHub](https://github.com/erBhushanPawar/sqldb)**
-
-</div>
 
 ---
 
