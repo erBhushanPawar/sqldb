@@ -7,6 +7,17 @@ export interface OrderByOption {
   direction: 'ASC' | 'DESC';
 }
 
+export interface RelationConfig {
+  // Fetch tables that reference this table (e.g., for a provider, fetch orders, services, etc.)
+  dependents?: boolean | string[];
+
+  // Fetch tables that this table references (e.g., for an order, fetch the provider, user, etc.)
+  dependencies?: boolean | string[];
+
+  // Maximum depth for nested relations (default: 1)
+  depth?: number;
+}
+
 export interface FindOptions {
   limit?: number;
   offset?: number;
@@ -14,6 +25,9 @@ export interface FindOptions {
   select?: string[];
   skipCache?: boolean;
   correlationId?: string;
+
+  // Automatically fetch related data
+  withRelations?: boolean | RelationConfig;
 }
 
 export interface TableOperations<T = any> {
@@ -39,6 +53,15 @@ export interface TableOperations<T = any> {
   // Cache control
   invalidateCache(): Promise<void>;
   warmCache(where?: WhereClause<T>, correlationId?: string): Promise<void>;
+  warmCacheWithRelations(
+    where?: WhereClause<T>,
+    options?: {
+      correlationId?: string;
+      depth?: number;
+      warmDependents?: boolean;
+      warmDependencies?: boolean;
+    }
+  ): Promise<void>;
 }
 
 export interface QueryResult {

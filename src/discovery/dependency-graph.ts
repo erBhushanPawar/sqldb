@@ -7,6 +7,9 @@ export class DependencyGraph {
   // Adjacency list: table -> set of tables it depends on (has FK to)
   private dependencies: Map<string, Set<string>> = new Map();
 
+  // Store full relationship details for reference
+  private relationships: TableRelationship[] = [];
+
   private maxDepth: number;
 
   constructor(maxDepth: number = 3) {
@@ -15,6 +18,9 @@ export class DependencyGraph {
 
   addRelationship(relationship: TableRelationship): void {
     const { fromTable, toTable } = relationship;
+
+    // Store the full relationship
+    this.relationships.push(relationship);
 
     // fromTable depends on toTable (fromTable has FK to toTable)
     if (!this.dependencies.has(fromTable)) {
@@ -41,6 +47,14 @@ export class DependencyGraph {
 
   getDependencies(table: string): string[] {
     return Array.from(this.dependencies.get(table) || []);
+  }
+
+  getRelationshipsFrom(table: string): TableRelationship[] {
+    return this.relationships.filter(r => r.fromTable === table);
+  }
+
+  getRelationshipsTo(table: string): TableRelationship[] {
+    return this.relationships.filter(r => r.toTable === table);
   }
 
   getInvalidationTargets(table: string): string[] {
@@ -100,6 +114,7 @@ export class DependencyGraph {
   clear(): void {
     this.dependents.clear();
     this.dependencies.clear();
+    this.relationships = [];
   }
 
   getGraphInfo(): { tables: number; relationships: number } {

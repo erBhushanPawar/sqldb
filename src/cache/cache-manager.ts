@@ -51,7 +51,10 @@ export class CacheManager {
     }
 
     try {
-      const serialized = JSON.stringify(value);
+      // Handle BigInt serialization
+      const serialized = JSON.stringify(value, (key, val) =>
+        typeof val === 'bigint' ? val.toString() : val
+      );
       const ttlSeconds = ttl || this.config.defaultTTL;
 
       await this.redis.set(key, serialized, ttlSeconds);

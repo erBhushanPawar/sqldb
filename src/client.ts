@@ -3,8 +3,10 @@ import {
   DEFAULT_CACHE_CONFIG,
   DEFAULT_DISCOVERY_CONFIG,
   DEFAULT_LOGGING_CONFIG,
+  DEFAULT_WARMING_CONFIG,
 } from './types/config';
 import { TableOperations, QueryMetadata } from './types/query';
+import { TableSchema } from './types/schema';
 import { MariaDBConnectionManager } from './connection/mariadb';
 import { RedisConnectionManager } from './connection/redis';
 import { SchemaReader } from './discovery/schema-reader';
@@ -17,6 +19,9 @@ import { TableOperationsImpl } from './query/operations';
 import { TableProxyFactory } from './query/table-proxy';
 import { HooksManager } from './hooks/hooks-manager';
 import { InMemoryQueryTracker } from './query/query-tracker';
+import { QueryStatsTracker } from './warming/query-stats-tracker';
+import { AutoWarmingManager } from './warming/auto-warming-manager';
+import { WarmingStats } from './types/warming';
 
 export class SmartDBClient {
   private config: SmartDBConfig;
@@ -30,8 +35,13 @@ export class SmartDBClient {
   public hooks!: HooksManager;
   public queryTracker: InMemoryQueryTracker;
 
+  // Auto-warming components
+  private statsTracker?: QueryStatsTracker;
+  private warmingManager?: AutoWarmingManager;
+
   private initialized: boolean = false;
   private discoveredTables: Set<string> = new Set();
+  private tableSchemas: Map<string, TableSchema> = new Map();
 
   constructor(config: SmartDBConfig) {
     this.config = {
@@ -39,6 +49,7 @@ export class SmartDBClient {
       cache: { ...DEFAULT_CACHE_CONFIG, ...config.cache },
       discovery: { ...DEFAULT_DISCOVERY_CONFIG, ...config.discovery },
       logging: { ...DEFAULT_LOGGING_CONFIG, ...config.logging },
+      warming: { ...DEFAULT_WARMING_CONFIG, ...config.warming },
     };
     this.queryTracker = new InMemoryQueryTracker();
   }
@@ -92,25 +103,27 @@ export class SmartDBClient {
       );
     }
 
+    // Initialize auto-warming system if enabled
+    if (this.config.warming!.enabled) {
+      this.statsTracker = new QueryStatsTracker(
+        this.dbManager,
+        this.config.warming!
+      );
+      await this.statsTracker.initialize();
+
+      this.warmingManager = new AutoWarmingManager(
+        this.dbManager,
+        this.cacheManager,
+        this.statsTracker,
+        this.config.warming!,
+        this.config.mariadb
+      );
+      await this.warmingManager.start();
+      this.log('info', 'Auto-warming enabled');
+    }
+
     this.initialized = true;
     this.log('info', 'SmartDBClient initialized successfully');
-
-    // Create dynamic table accessors using Proxy
-    return new Proxy(this, {
-      get(target, prop: string) {
-        // If prop exists on target, return it
-        if (prop in target) {
-          return (target as any)[prop];
-        }
-
-        // Otherwise, treat it as a table name
-        if (typeof prop === 'string' && !prop.startsWith('_')) {
-          return target.getTableOperations(prop);
-        }
-
-        return undefined;
-      },
-    }) as any;
   }
 
   private async discoverSchema(): Promise<void> {
@@ -128,6 +141,7 @@ export class SmartDBClient {
 
     for (const table of tables) {
       this.discoveredTables.add(table.tableName);
+      this.tableSchemas.set(table.tableName, table);
     }
 
     // Discover relationships
@@ -145,6 +159,7 @@ export class SmartDBClient {
     this.log('info', 'Refreshing database schema...');
 
     this.discoveredTables.clear();
+    this.tableSchemas.clear();
     this.dependencyGraph.clear();
 
     await this.discoverSchema();
@@ -185,6 +200,10 @@ export class SmartDBClient {
     return Array.from(this.discoveredTables);
   }
 
+  getTableSchema(tableName: string): TableSchema | undefined {
+    return this.tableSchemas.get(tableName);
+  }
+
   getQueries(correlationId?: string): QueryMetadata[] {
     return this.queryTracker.getQueries(correlationId);
   }
@@ -208,8 +227,32 @@ export class SmartDBClient {
     };
   }
 
+  /**
+   * Generate TypeScript interface from database schema
+   */
+  generateSchema(options?: {
+    interfaceName?: string;
+    includeComments?: boolean;
+    nullableFields?: boolean;
+    withExample?: boolean;
+  }): string {
+    const { SchemaGenerator } = require('./cli/schema-generator');
+    const generator = new SchemaGenerator(this);
+
+    if (options?.withExample) {
+      return generator.generateWithExample(options);
+    }
+
+    return generator.generateCompleteSchema(options);
+  }
+
   async close(): Promise<void> {
     this.log('info', 'Closing SmartDBClient...');
+
+    // Stop auto-warming if enabled
+    if (this.warmingManager) {
+      await this.warmingManager.stop();
+    }
 
     await this.cacheManager.clear();
     await this.dbManager.close();
@@ -218,6 +261,38 @@ export class SmartDBClient {
     this.initialized = false;
 
     this.log('info', 'SmartDBClient closed');
+  }
+
+  /**
+   * Get auto-warming statistics
+   */
+  getWarmingStats(): WarmingStats | null {
+    return this.warmingManager?.getLastWarmingStats() || null;
+  }
+
+  /**
+   * Manually trigger cache warming
+   */
+  async warmCache(): Promise<WarmingStats | undefined> {
+    if (!this.warmingManager) {
+      throw new Error('Auto-warming is not enabled. Set warming.enabled = true in config.');
+    }
+    return await this.warmingManager.warmCache();
+  }
+
+  /**
+   * Get query statistics summary
+   */
+  async getQueryStatsSummary(): Promise<{
+    totalQueries: number;
+    totalAccesses: number;
+    tableCount: number;
+    avgAccessCount: number;
+  } | null> {
+    if (!this.statsTracker) {
+      return null;
+    }
+    return await this.statsTracker.getStatsSummary();
   }
 
   private log(level: string, message: string, meta?: any): void {

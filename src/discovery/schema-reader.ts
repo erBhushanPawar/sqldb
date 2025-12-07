@@ -16,18 +16,19 @@ export class SchemaReader {
     const tables = await this.getTableNames(database);
     const filteredTables = this.filterTables(tables);
 
-    const tableSchemas: TableSchema[] = [];
+    // Fetch all columns in a single query for better performance
+    const allColumns = await this.getAllTableColumns(database, filteredTables);
 
-    for (const tableName of filteredTables) {
-      const columns = await this.getTableColumns(database, tableName);
+    const tableSchemas: TableSchema[] = filteredTables.map((tableName) => {
+      const columns = allColumns.get(tableName) || [];
       const primaryKey = this.findPrimaryKey(columns);
 
-      tableSchemas.push({
+      return {
         tableName,
         columns,
         primaryKey,
-      });
-    }
+      };
+    });
 
     return tableSchemas;
   }
@@ -70,35 +71,70 @@ export class SchemaReader {
     return filtered;
   }
 
-  private async getTableColumns(
+  private async getAllTableColumns(
     database: string,
-    tableName: string
-  ): Promise<ColumnInfo[]> {
+    tableNames: string[]
+  ): Promise<Map<string, ColumnInfo[]>> {
+    if (tableNames.length === 0) {
+      return new Map();
+    }
+
+    // Create placeholders for IN clause
+    const placeholders = tableNames.map(() => '?').join(',');
+
     const sql = `
       SELECT
+        TABLE_NAME as tableName,
         COLUMN_NAME as columnName,
         DATA_TYPE as dataType,
+        COLUMN_TYPE as columnType,
         IS_NULLABLE as isNullable,
         COLUMN_KEY as columnKey,
         COLUMN_DEFAULT as columnDefault,
-        EXTRA as extra
+        EXTRA as extra,
+        CHARACTER_MAXIMUM_LENGTH as characterMaximumLength,
+        NUMERIC_PRECISION as numericPrecision,
+        NUMERIC_SCALE as numericScale,
+        CHARACTER_SET_NAME as characterSetName,
+        COLLATION_NAME as collationName,
+        ORDINAL_POSITION as ordinalPosition
       FROM INFORMATION_SCHEMA.COLUMNS
       WHERE TABLE_SCHEMA = ?
-      AND TABLE_NAME = ?
-      ORDER BY ORDINAL_POSITION
+      AND TABLE_NAME IN (${placeholders})
+      ORDER BY TABLE_NAME, ORDINAL_POSITION
     `;
 
-    const result: any = await this.dbManager.query(sql, [database, tableName]);
+    const result: any = await this.dbManager.query(sql, [database, ...tableNames]);
 
-    return result.map((row: any) => ({
-      columnName: row.columnName,
-      dataType: row.dataType,
-      isNullable: row.isNullable === 'YES',
-      columnKey: row.columnKey || '',
-      columnDefault: row.columnDefault,
-      extra: row.extra || '',
-    }));
+    // Group columns by table name
+    const columnsByTable = new Map<string, ColumnInfo[]>();
+
+    for (const row of result) {
+      const tableName = row.tableName;
+
+      if (!columnsByTable.has(tableName)) {
+        columnsByTable.set(tableName, []);
+      }
+
+      columnsByTable.get(tableName)!.push({
+        columnName: row.columnName,
+        dataType: row.dataType,
+        columnType: row.columnType,
+        isNullable: row.isNullable === 'YES',
+        columnKey: row.columnKey || '',
+        columnDefault: row.columnDefault,
+        extra: row.extra || '',
+        characterMaximumLength: row.characterMaximumLength,
+        numericPrecision: row.numericPrecision,
+        numericScale: row.numericScale,
+        characterSetName: row.characterSetName,
+        collationName: row.collationName,
+      });
+    }
+
+    return columnsByTable;
   }
+
 
   private findPrimaryKey(columns: ColumnInfo[]): string | undefined {
     const pkColumn = columns.find((col) => col.columnKey === 'PRI');

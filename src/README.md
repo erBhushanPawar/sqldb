@@ -1,4 +1,4 @@
-# mariadb-smart-cache
+# @bhushanpawar/sqldb
 
 A smart MariaDB ORM layer with intelligent Redis caching, automatic relationship discovery, and cascading cache invalidation.
 
@@ -15,13 +15,13 @@ A smart MariaDB ORM layer with intelligent Redis caching, automatic relationship
 ## Installation
 
 ```bash
-npm install mariadb-smart-cache mariadb ioredis
+npm install @bhushanpawar/sqldb mariadb ioredis
 ```
 
 ## Quick Start
 
 ```typescript
-import { createSmartDB } from 'mariadb-smart-cache';
+import { createSmartDB } from '@bhushanpawar/sqldb';
 
 const db = await createSmartDB({
   mariadb: {
