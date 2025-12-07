@@ -8,6 +8,7 @@ async function basicUsageExample() {
       user: 'root',
       password: 'password',
       database: 'mydb',
+      logging: true,
     },
     redis: {
       host: 'localhost',

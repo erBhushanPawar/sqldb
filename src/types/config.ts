@@ -1,5 +1,6 @@
 import * as mariadb from 'mariadb';
 import { RedisOptions } from 'ioredis';
+import { WarmingConfig } from './warming';
 
 export interface MariaDBConfig {
   host: string;
@@ -47,6 +48,7 @@ export interface SmartDBConfig {
   cache?: CacheConfig;
   discovery?: DiscoveryConfig;
   logging?: LoggingConfig;
+  warming?: WarmingConfig;
 }
 
 // Default configurations
@@ -73,4 +75,18 @@ export const DEFAULT_LOGGING_CONFIG: Required<LoggingConfig> = {
     const metaStr = meta ? ` ${JSON.stringify(meta)}` : '';
     console.log(`[${timestamp}] [${level.toUpperCase()}] ${message}${metaStr}`);
   },
+};
+
+export const DEFAULT_WARMING_CONFIG: Required<WarmingConfig> = {
+  enabled: false,
+  intervalMs: 60000, // 1 minute
+  topQueriesPerTable: 10,
+  minAccessCount: 5,
+  maxStatsAge: 3600000, // 1 hour
+  useSeperatePool: true,
+  warmingPoolSize: 2,
+  trackInDatabase: true,
+  statsTableName: '__sqldb_query_stats',
+  onWarmingComplete: undefined as any,
+  onWarmingError: undefined as any,
 };

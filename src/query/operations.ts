@@ -226,6 +226,12 @@ export class TableOperationsImpl<T = any> implements TableOperations<T> {
   }
 
   async updateById(id: string | number, data: Partial<T>, correlationId?: string): Promise<T | null> {
+    // First fetch the existing record before update
+    const existing = await this.findById(id, correlationId);
+    if (!existing) {
+      return null;
+    }
+
     const { sql, params } = this.queryBuilder.buildUpdateById(
       this.tableName,
       id,
@@ -242,10 +248,9 @@ export class TableOperationsImpl<T = any> implements TableOperations<T> {
       ).catch(err => console.error('[UpdateById] Cache invalidation error:', err));
     }
 
-    // Return a lightweight object with just the updated fields
-    // This avoids a second SELECT query while still providing useful data
+    // Return merged record (existing data + updates)
     if (result.affectedRows > 0) {
-      return { ...data, id } as T;
+      return { ...existing, ...data } as T;
     }
 
     return null;

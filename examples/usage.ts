@@ -6,39 +6,7 @@ import * as path from "path";
 
 async function performanceTest() {
     configDotenv();
-    const dbConfigStr = process.env.DB_CONFIG;
-    if (!dbConfigStr) {
-        throw new Error('DB_CONFIG not found in .env file');
-    }
-
-    const dbConfig = JSON.parse(dbConfigStr);
-
-    const dbClient = await createSmartDB({
-        mariadb: {
-            host: dbConfig.host,
-            port: dbConfig.port,
-            user: dbConfig.username,
-            password: dbConfig.password,
-            database: dbConfig.database,
-            connectionLimit: 50,
-        },
-        redis: {
-            host: process.env.REDIS_HOST || 'localhost',
-            port: parseInt(process.env.REDIS_PORT || '6379'),
-            keyPrefix: 'perf_test:',
-        },
-        cache: {
-            enabled: true,
-            defaultTTL: 300, // 5 minutes for performance testing
-            maxKeys: 10000,
-        },
-        discovery: {
-            autoDiscover: false, // Skip discovery for faster startup
-        },
-        logging: {
-            level: 'info',
-        },
-    });
+    const dbClient = await getDBClient();
 
     console.log('\n=== MariaDB Cache Performance Test ===\n');
 
@@ -216,6 +184,7 @@ async function getDBClient(): Promise<SmartDBClient> {
             password: dbConfig.password,
             database: dbConfig.database,
             connectionLimit: 50,
+            logging: true
         },
         redis: {
             host: process.env.REDIS_HOST || 'localhost',
@@ -235,6 +204,11 @@ async function getDBClient(): Promise<SmartDBClient> {
         logging: {
             level: 'info',
         },
+        warming: {
+            enabled: true,
+            warmingPoolSize: 2
+
+        }
     });
     return dbClient;
 }

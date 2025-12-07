@@ -3,6 +3,7 @@ import {
   DEFAULT_CACHE_CONFIG,
   DEFAULT_DISCOVERY_CONFIG,
   DEFAULT_LOGGING_CONFIG,
+  DEFAULT_WARMING_CONFIG,
 } from './types/config';
 import { TableOperations, QueryMetadata } from './types/query';
 import { TableSchema } from './types/schema';
@@ -18,6 +19,9 @@ import { TableOperationsImpl } from './query/operations';
 import { TableProxyFactory } from './query/table-proxy';
 import { HooksManager } from './hooks/hooks-manager';
 import { InMemoryQueryTracker } from './query/query-tracker';
+import { QueryStatsTracker } from './warming/query-stats-tracker';
+import { AutoWarmingManager } from './warming/auto-warming-manager';
+import { WarmingStats } from './types/warming';
 
 export class SmartDBClient {
   private config: SmartDBConfig;
@@ -31,6 +35,10 @@ export class SmartDBClient {
   public hooks!: HooksManager;
   public queryTracker: InMemoryQueryTracker;
 
+  // Auto-warming components
+  private statsTracker?: QueryStatsTracker;
+  private warmingManager?: AutoWarmingManager;
+
   private initialized: boolean = false;
   private discoveredTables: Set<string> = new Set();
   private tableSchemas: Map<string, TableSchema> = new Map();
@@ -41,6 +49,7 @@ export class SmartDBClient {
       cache: { ...DEFAULT_CACHE_CONFIG, ...config.cache },
       discovery: { ...DEFAULT_DISCOVERY_CONFIG, ...config.discovery },
       logging: { ...DEFAULT_LOGGING_CONFIG, ...config.logging },
+      warming: { ...DEFAULT_WARMING_CONFIG, ...config.warming },
     };
     this.queryTracker = new InMemoryQueryTracker();
   }
@@ -92,6 +101,25 @@ export class SmartDBClient {
         () => this.refreshSchema(),
         this.config.discovery!.refreshInterval
       );
+    }
+
+    // Initialize auto-warming system if enabled
+    if (this.config.warming!.enabled) {
+      this.statsTracker = new QueryStatsTracker(
+        this.dbManager,
+        this.config.warming!
+      );
+      await this.statsTracker.initialize();
+
+      this.warmingManager = new AutoWarmingManager(
+        this.dbManager,
+        this.cacheManager,
+        this.statsTracker,
+        this.config.warming!,
+        this.config.mariadb
+      );
+      await this.warmingManager.start();
+      this.log('info', 'Auto-warming enabled');
     }
 
     this.initialized = true;
@@ -221,6 +249,11 @@ export class SmartDBClient {
   async close(): Promise<void> {
     this.log('info', 'Closing SmartDBClient...');
 
+    // Stop auto-warming if enabled
+    if (this.warmingManager) {
+      await this.warmingManager.stop();
+    }
+
     await this.cacheManager.clear();
     await this.dbManager.close();
     await this.redisManager.close();
@@ -228,6 +261,38 @@ export class SmartDBClient {
     this.initialized = false;
 
     this.log('info', 'SmartDBClient closed');
+  }
+
+  /**
+   * Get auto-warming statistics
+   */
+  getWarmingStats(): WarmingStats | null {
+    return this.warmingManager?.getLastWarmingStats() || null;
+  }
+
+  /**
+   * Manually trigger cache warming
+   */
+  async warmCache(): Promise<WarmingStats | undefined> {
+    if (!this.warmingManager) {
+      throw new Error('Auto-warming is not enabled. Set warming.enabled = true in config.');
+    }
+    return await this.warmingManager.warmCache();
+  }
+
+  /**
+   * Get query statistics summary
+   */
+  async getQueryStatsSummary(): Promise<{
+    totalQueries: number;
+    totalAccesses: number;
+    tableCount: number;
+    avgAccessCount: number;
+  } | null> {
+    if (!this.statsTracker) {
+      return null;
+    }
+    return await this.statsTracker.getStatsSummary();
   }
 
   private log(level: string, message: string, meta?: any): void {
