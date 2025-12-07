@@ -1,5 +1,5 @@
-import { SmartDBClient } from '../../../src/client';
-import { SmartDBConfig } from '../../../src/types/config';
+import { SqlDBClient } from '../../../src/client';
+import { SqlDBConfig } from '../../../src/types/config';
 
 // Mock all dependencies
 jest.mock('../../../src/connection/mariadb');
@@ -12,8 +12,8 @@ import { RedisConnectionManager } from '../../../src/connection/redis';
 import { SchemaReader } from '../../../src/discovery/schema-reader';
 import { RelationshipParser } from '../../../src/discovery/relationship-parser';
 
-describe('SmartDBClient Integration', () => {
-  let config: SmartDBConfig;
+describe('SqlDBClient Integration', () => {
+  let config: SqlDBConfig;
 
   beforeEach(() => {
     config = {
@@ -77,7 +77,7 @@ describe('SmartDBClient Integration', () => {
 
   describe('initialize', () => {
     it('should initialize successfully', async () => {
-      const client = new SmartDBClient(config);
+      const client = new SqlDBClient(config);
       await client.initialize();
 
       expect(MariaDBConnectionManager.prototype.connect).toHaveBeenCalled();
@@ -85,7 +85,7 @@ describe('SmartDBClient Integration', () => {
     });
 
     it('should discover schema when autoDiscover is true', async () => {
-      const client = new SmartDBClient(config);
+      const client = new SqlDBClient(config);
       await client.initialize();
 
       expect(SchemaReader.prototype.discoverTables).toHaveBeenCalled();
@@ -98,14 +98,14 @@ describe('SmartDBClient Integration', () => {
         discovery: { autoDiscover: false },
       };
 
-      const client = new SmartDBClient(noDiscoveryConfig);
+      const client = new SqlDBClient(noDiscoveryConfig);
       await client.initialize();
 
       expect(SchemaReader.prototype.discoverTables).not.toHaveBeenCalled();
     });
 
     it('should only initialize once', async () => {
-      const client = new SmartDBClient(config);
+      const client = new SqlDBClient(config);
       await client.initialize();
       await client.initialize();
 
@@ -116,7 +116,7 @@ describe('SmartDBClient Integration', () => {
 
   describe('getTableOperations', () => {
     it('should return table operations', async () => {
-      const client = new SmartDBClient(config);
+      const client = new SqlDBClient(config);
       await client.initialize();
 
       const operations = client.getTableOperations('users');
@@ -128,17 +128,17 @@ describe('SmartDBClient Integration', () => {
     });
 
     it('should throw error if not initialized', () => {
-      const client = new SmartDBClient(config);
+      const client = new SqlDBClient(config);
 
       expect(() => {
         client.getTableOperations('users');
-      }).toThrow('SmartDBClient not initialized');
+      }).toThrow('SqlDBClient not initialized');
     });
   });
 
   describe('getDiscoveredTables', () => {
     it('should return discovered tables', async () => {
-      const client = new SmartDBClient(config);
+      const client = new SqlDBClient(config);
       await client.initialize();
 
       const tables = client.getDiscoveredTables();
@@ -150,7 +150,7 @@ describe('SmartDBClient Integration', () => {
 
   describe('getDependencyGraph', () => {
     it('should return dependency graph', async () => {
-      const client = new SmartDBClient(config);
+      const client = new SqlDBClient(config);
       await client.initialize();
 
       const graph = client.getDependencyGraph();
@@ -163,7 +163,7 @@ describe('SmartDBClient Integration', () => {
 
   describe('getCacheManager', () => {
     it('should return cache manager', async () => {
-      const client = new SmartDBClient(config);
+      const client = new SqlDBClient(config);
       await client.initialize();
 
       const cacheManager = client.getCacheManager();
@@ -176,7 +176,7 @@ describe('SmartDBClient Integration', () => {
 
   describe('getInvalidationManager', () => {
     it('should return invalidation manager', async () => {
-      const client = new SmartDBClient(config);
+      const client = new SqlDBClient(config);
       await client.initialize();
 
       const invalidationManager = client.getInvalidationManager();
@@ -188,7 +188,7 @@ describe('SmartDBClient Integration', () => {
 
   describe('healthCheck', () => {
     it('should return health status', async () => {
-      const client = new SmartDBClient(config);
+      const client = new SqlDBClient(config);
       await client.initialize();
 
       const health = await client.healthCheck();
@@ -201,7 +201,7 @@ describe('SmartDBClient Integration', () => {
     it('should return false overall if MariaDB is down', async () => {
       (MariaDBConnectionManager.prototype.healthCheck as jest.Mock) = jest.fn().mockResolvedValue(false);
 
-      const client = new SmartDBClient(config);
+      const client = new SqlDBClient(config);
       await client.initialize();
 
       const health = await client.healthCheck();
@@ -213,7 +213,7 @@ describe('SmartDBClient Integration', () => {
     it('should return false overall if Redis is down', async () => {
       (RedisConnectionManager.prototype.healthCheck as jest.Mock) = jest.fn().mockResolvedValue(false);
 
-      const client = new SmartDBClient(config);
+      const client = new SqlDBClient(config);
       await client.initialize();
 
       const health = await client.healthCheck();
@@ -225,7 +225,7 @@ describe('SmartDBClient Integration', () => {
 
   describe('refreshSchema', () => {
     it('should refresh schema', async () => {
-      const client = new SmartDBClient(config);
+      const client = new SqlDBClient(config);
       await client.initialize();
 
       // Clear mock calls from initialization
@@ -240,7 +240,7 @@ describe('SmartDBClient Integration', () => {
 
   describe('close', () => {
     it('should close all connections', async () => {
-      const client = new SmartDBClient(config);
+      const client = new SqlDBClient(config);
       await client.initialize();
 
       await client.close();
@@ -252,7 +252,7 @@ describe('SmartDBClient Integration', () => {
 
   describe('hooks', () => {
     it('should have hooks manager', async () => {
-      const client = new SmartDBClient(config);
+      const client = new SqlDBClient(config);
       await client.initialize();
 
       expect(client.hooks).toBeDefined();

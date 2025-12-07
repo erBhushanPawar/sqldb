@@ -1,5 +1,5 @@
 import { configDotenv } from "dotenv";
-import { createSmartDB } from "../src";
+import { createSqlDB } from "../src";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -14,7 +14,7 @@ async function generateSchema() {
 
     console.log('🔍 Connecting to database and discovering schema...\n');
 
-    const db = await createSmartDB({
+    const db = await createSqlDB({
         mariadb: {
             host: dbConfig.host,
             port: dbConfig.port,
@@ -97,10 +97,10 @@ async function generateSchema() {
     console.log('');
     console.log('2. Import and use in your code:');
     console.log('');
-    console.log('   import { createSmartDB } from "@bhushanpawar/sqldb";');
+    console.log('   import { createSqlDB } from "@bhushanpawar/sqldb";');
     console.log('   import { DB } from "./db-schema";');
     console.log('');
-    console.log('   const db = await createSmartDB(config) as DB;');
+    console.log('   const db = await createSqlDB(config) as DB;');
     console.log('');
     console.log('   // Full type safety!');
     const sampleTables = db.getDiscoveredTables().slice(0, 3);

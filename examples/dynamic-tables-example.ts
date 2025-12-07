@@ -1,9 +1,9 @@
 import { configDotenv } from "dotenv";
-import { createSmartDB, SmartDBClient } from "../src";
+import { createSqlDB, SqlDBClient } from "../src";
 import { TableOperations } from "../src/types/query";
 
-// Extend SmartDBClient with dynamic table accessors
-type SmartDBWithTables = SmartDBClient & {
+// Extend SqlDBClient with dynamic table accessors
+type SqlDBWithTables = SqlDBClient & {
     [tableName: string]: TableOperations<any>;
 };
 
@@ -18,7 +18,7 @@ async function dynamicTablesExample() {
 
     console.log('=== Dynamic Table Access Example ===\n');
 
-    const db = await createSmartDB({
+    const db = await createSqlDB({
         mariadb: {
             host: dbConfig.host,
             port: dbConfig.port,
@@ -42,7 +42,7 @@ async function dynamicTablesExample() {
         logging: {
             level: 'error',
         },
-    }) as SmartDBWithTables;
+    }) as SqlDBWithTables;
 
     console.log('Database initialized with dynamic table access\n');
 

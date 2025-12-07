@@ -1,5 +1,5 @@
 import {
-  SmartDBConfig,
+  SqlDBConfig,
   DEFAULT_CACHE_CONFIG,
   DEFAULT_DISCOVERY_CONFIG,
   DEFAULT_LOGGING_CONFIG,
@@ -23,8 +23,8 @@ import { QueryStatsTracker } from './warming/query-stats-tracker';
 import { AutoWarmingManager } from './warming/auto-warming-manager';
 import { WarmingStats } from './types/warming';
 
-export class SmartDBClient {
-  private config: SmartDBConfig;
+export class SqlDBClient {
+  private config: SqlDBConfig;
   private dbManager!: MariaDBConnectionManager;
   private redisManager!: RedisConnectionManager;
   private cacheManager!: CacheManager;
@@ -43,7 +43,7 @@ export class SmartDBClient {
   private discoveredTables: Set<string> = new Set();
   private tableSchemas: Map<string, TableSchema> = new Map();
 
-  constructor(config: SmartDBConfig) {
+  constructor(config: SqlDBConfig) {
     this.config = {
       ...config,
       cache: { ...DEFAULT_CACHE_CONFIG, ...config.cache },
@@ -59,7 +59,7 @@ export class SmartDBClient {
       return;
     }
 
-    this.log('info', 'Initializing SmartDBClient...');
+    this.log('info', 'Initializing SqlDBClient...');
 
     // Initialize connection managers
     this.dbManager = new MariaDBConnectionManager(this.config.mariadb, this.queryTracker);
@@ -123,7 +123,7 @@ export class SmartDBClient {
     }
 
     this.initialized = true;
-    this.log('info', 'SmartDBClient initialized successfully');
+    this.log('info', 'SqlDBClient initialized successfully');
   }
 
   private async discoverSchema(): Promise<void> {
@@ -170,7 +170,7 @@ export class SmartDBClient {
   getTableOperations<T = any>(tableName: string): TableOperations<T> {
     if (!this.initialized) {
       throw new Error(
-        'SmartDBClient not initialized. Call initialize() first.'
+        'SqlDBClient not initialized. Call initialize() first.'
       );
     }
 
@@ -247,7 +247,7 @@ export class SmartDBClient {
   }
 
   async close(): Promise<void> {
-    this.log('info', 'Closing SmartDBClient...');
+    this.log('info', 'Closing SqlDBClient...');
 
     // Stop auto-warming if enabled
     if (this.warmingManager) {
@@ -260,7 +260,7 @@ export class SmartDBClient {
 
     this.initialized = false;
 
-    this.log('info', 'SmartDBClient closed');
+    this.log('info', 'SqlDBClient closed');
   }
 
   /**

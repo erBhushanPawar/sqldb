@@ -42,7 +42,7 @@ export interface LoggingConfig {
   logger?: (level: string, message: string, meta?: any) => void;
 }
 
-export interface SmartDBConfig {
+export interface SqlDBConfig {
   mariadb: MariaDBConfig;
   redis: RedisConfig;
   cache?: CacheConfig;

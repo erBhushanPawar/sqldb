@@ -1,5 +1,5 @@
 import { configDotenv } from 'dotenv';
-import { createSmartDB } from '../src';
+import { createSqlDB } from '../src';
 
 async function autoWarmingExample() {
   configDotenv();
@@ -19,7 +19,7 @@ async function autoWarmingExample() {
   console.log('  - Persists stats in __sqldb_query_stats table\n');
 
   // Create DB with auto-warming enabled
-  const db = await createSmartDB({
+  const db = await createSqlDB({
     mariadb: {
       host: dbConfig.host,
       port: dbConfig.port,
@@ -68,7 +68,7 @@ async function autoWarmingExample() {
     },
   });
 
-  console.log('✅ SmartDB initialized with auto-warming enabled\n');
+  console.log('✅ SqlDB initialized with auto-warming enabled\n');
 
   // Simulate user queries to build up statistics
   console.log('📝 Simulating user queries...\n');

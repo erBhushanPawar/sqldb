@@ -19,9 +19,9 @@ The auto-warming system continuously monitors which queries are accessed most fr
 ## Quick Start
 
 ```typescript
-import { createSmartDB } from '@bhushanpawar/sqldb';
+import { createSqlDB } from '@bhushanpawar/sqldb';
 
-const db = await createSmartDB({
+const db = await createSqlDB({
   mariadb: { /* ... */ },
   redis: { /* ... */ },
   warming: {

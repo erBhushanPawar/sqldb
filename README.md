@@ -16,7 +16,7 @@ Stop wasting hours on cache invalidation bugs. Stop paying for database CPU you 
 
 **Most database libraries make you choose:** 🐌 Simple & slow ORM **OR** ⚡ Fast but complex manual caching
 
-**SmartDB gives you both.**
+**SqlDB gives you both.**
 
 ```typescript
 // Replace this mess...
@@ -41,7 +41,7 @@ const users = await db.users.findMany({ status });
 <tr>
 <td width="50%">
 
-**Before SmartDB** 😰
+**Before SqlDB** 😰
 ```
 Average response:     250ms
 Database CPU:         85%
@@ -54,7 +54,7 @@ Developer happiness:  😫
 </td>
 <td width="50%">
 
-**After SmartDB** 🎉
+**After SqlDB** 🎉
 ```
 Average response:     <1ms  (250x faster ⚡)
 Database CPU:         15%  (85% reduction)
@@ -84,10 +84,10 @@ Developer happiness:  😍
 ## 🎬 See It In Action
 
 ```typescript
-import { createSmartDB } from '@bhushanpawar/sqldb';
+import { createSqlDB } from '@bhushanpawar/sqldb';
 
 // 1. Initialize (auto-discovers your entire schema)
-const db = await createSmartDB({
+const db = await createSqlDB({
   mariadb: { host: 'localhost', user: 'root', password: 'pass', database: 'mydb' },
   redis: { host: 'localhost' }
 });
@@ -160,7 +160,7 @@ app.post('/users', async (req, res) => {
 ### The Solution
 
 ```typescript
-// SmartDB - SIMPLE ✅ FAST ✅ AUTOMATIC ✅
+// SqlDB - SIMPLE ✅ FAST ✅ AUTOMATIC ✅
 app.get('/users', async (req, res) => {
   const users = await db.users.findMany();  // 1ms (cached) after first request
   res.json(users);
@@ -194,7 +194,7 @@ Updates to `users` automatically invalidate `posts` and `comments` caches. **Fol
 // Update a user
 await db.users.updateById(1, { name: 'Jane' });
 
-// SmartDB automatically clears:
+// SqlDB automatically clears:
 // ✓ users:* cache
 // ✓ posts:* cache (has user_id FK)
 // ✓ comments:* cache (has post_id FK → user_id FK)
@@ -253,8 +253,8 @@ interface User {
   status: 'active' | 'inactive';
 }
 
-type MyDB = SmartDBWithTables<{ users: User }>;
-const db = await createSmartDB(config) as MyDB;
+type MyDB = SqlDBWithTables<{ users: User }>;
+const db = await createSqlDB(config) as MyDB;
 
 // Full autocomplete and type checking ✨
 const users = await db.users.findMany();  // Type: User[]
@@ -265,7 +265,7 @@ await db.users.updateById(1, { invalid: 'field' });   // ❌ TypeScript error
 ### 🔗 **Zero Configuration** - Works Out of the Box
 
 ```typescript
-const db = await createSmartDB({
+const db = await createSqlDB({
   mariadb: { host: 'localhost', user: 'root', password: 'pass', database: 'mydb' },
   redis: { host: 'localhost' }
 });
@@ -285,7 +285,7 @@ const db = await createSmartDB({
 
 ## Real-World Performance
 
-**Before SmartDB:**
+**Before SqlDB:**
 ```
 Average API response time: 250ms
 Database load: 85% CPU
@@ -294,7 +294,7 @@ Cache hit rate: 0%
 Lines of caching code: 500+
 ```
 
-**After SmartDB:**
+**After SqlDB:**
 ```
 Average API response time: 12ms (20x faster ⚡)
 Database load: 15% CPU (85% reduction)
@@ -305,7 +305,7 @@ Lines of caching code: 0
 
 ## Quick Comparison
 
-| Feature | Traditional ORM | Manual Cache | **SmartDB** |
+| Feature | Traditional ORM | Manual Cache | **SqlDB** |
 |---------|----------------|--------------|-------------|
 | Query Speed | 🐌 200ms | ⚡ 2ms | ⚡ **<1ms** |
 | Auto-Caching | ❌ | ❌ | ✅ **Built-in** |
@@ -351,9 +351,9 @@ npm install @bhushanpawar/sqldb mariadb redis
 
 ### 2. Initialize
 ```typescript
-import { createSmartDB } from '@bhushanpawar/sqldb';
+import { createSqlDB } from '@bhushanpawar/sqldb';
 
-const db = await createSmartDB({
+const db = await createSqlDB({
   mariadb: { host: 'localhost', user: 'root', password: 'pass', database: 'mydb' },
   redis: { host: 'localhost' }
 });
@@ -383,9 +383,9 @@ Lines of code:  3 (vs 50+)
 Here's a more complete example with all the bells and whistles:
 
 ```typescript
-import { createSmartDB } from '@bhushanpawar/sqldb';
+import { createSqlDB } from '@bhushanpawar/sqldb';
 
-const db = await createSmartDB({
+const db = await createSqlDB({
   // Database connection
   mariadb: {
     host: 'localhost',
@@ -492,19 +492,19 @@ await db.close();
 For production applications, use singleton mode to share a single connection pool:
 
 ```typescript
-import { createSmartDB, getSmartDB } from '@bhushanpawar/sqldb';
+import { createSqlDB, getSqlDB } from '@bhushanpawar/sqldb';
 
 // Initialize once at app startup
-const db = await createSmartDB({
+const db = await createSqlDB({
   mariadb: { /* config */ },
   redis: { /* config */ },
   cache: { enabled: true },
 }, { singleton: true }); // Enable singleton mode
 
 // Access anywhere in your app
-import { getSmartDB } from '@bhushanpawar/sqldb';
+import { getSqlDB } from '@bhushanpawar/sqldb';
 
-const db = getSmartDB(); // Returns the same instance
+const db = getSqlDB(); // Returns the same instance
 const users = db.getTableOperations('users');
 ```
 
@@ -515,7 +515,7 @@ See [SINGLETON_PATTERN.md](./docs/SINGLETON_PATTERN.md) for detailed usage.
 Access tables directly as properties with full type safety:
 
 ```typescript
-import { createSmartDB, SmartDBWithTables } from '@bhushanpawar/sqldb';
+import { createSqlDB, SqlDBWithTables } from '@bhushanpawar/sqldb';
 
 // Define your schema
 interface MySchema {
@@ -523,9 +523,9 @@ interface MySchema {
   orders: { id: number; user_id: number; total: number };
 }
 
-type MyDB = SmartDBWithTables<MySchema>;
+type MyDB = SqlDBWithTables<MySchema>;
 
-const db = await createSmartDB(config) as MyDB;
+const db = await createSqlDB(config) as MyDB;
 
 // Clean, typed access
 const users = await db.users.findMany();           // Type: MySchema['users'][]
@@ -584,10 +584,10 @@ The raw query cache:
 
 ### Schema Discovery
 
-SmartDB automatically discovers your database schema on initialization:
+SqlDB automatically discovers your database schema on initialization:
 
 ```typescript
-const db = await createSmartDB({
+const db = await createSqlDB({
   discovery: {
     autoDiscover: true,
     includedTables: ['users', 'posts', 'comments'], // Optional: specific tables
@@ -607,7 +607,7 @@ const deps = graph.getDependencies('users'); // Tables that depend on users
 
 ### Relationship Mapping
 
-SmartDB automatically maps foreign key relationships:
+SqlDB automatically maps foreign key relationships:
 
 ```typescript
 // Schema example:
@@ -625,7 +625,7 @@ await users.updateById(1, { name: 'Jane' });
 
 ```typescript
 // 1. Automatic invalidation on write (recommended)
-await createSmartDB({
+await createSqlDB({
   cache: {
     invalidateOnWrite: true,
     cascadeInvalidation: true, // Invalidate related tables
@@ -650,9 +650,9 @@ await cacheManager.clear();
 ### Complete Configuration Example
 
 ```typescript
-import { createSmartDB, SmartDBConfig } from '@bhushanpawar/sqldb';
+import { createSqlDB, SqlDBConfig } from '@bhushanpawar/sqldb';
 
-const config: SmartDBConfig = {
+const config: SqlDBConfig = {
   // MariaDB connection
   mariadb: {
     host: 'localhost',
@@ -701,7 +701,7 @@ const config: SmartDBConfig = {
   },
 };
 
-const db = await createSmartDB(config);
+const db = await createSqlDB(config);
 ```
 
 ### Configuration Options
@@ -918,7 +918,7 @@ await provider.warmCacheWithRelations({}, {
 
 **Example - Warm on Startup:**
 ```typescript
-async function warmCacheOnStartup(db: SmartDBClient) {
+async function warmCacheOnStartup(db: SqlDBClient) {
   // Warm most frequently accessed tables with their relations
   const provider = db.getTableOperations('provider');
   const orders = db.getTableOperations('orders');
@@ -1000,7 +1000,7 @@ interface QueryMetadata {
 // When you update a user:
 await users.updateById(1, { name: 'Updated Name' });
 
-// SmartDB invalidates:
+// SqlDB invalidates:
 // 1. users:* (direct table)
 // 2. posts:* (depends on users via user_id)
 // 3. comments:* (depends on posts via post_id)
@@ -1137,10 +1137,10 @@ console.log(`Total queries executed: ${queries.length}`); // Should be 1 if cach
 
 ## API Reference
 
-### SmartDBClient
+### SqlDBClient
 
 ```typescript
-class SmartDBClient {
+class SqlDBClient {
   // Initialize client
   async initialize(): Promise<void>;
 
@@ -1275,9 +1275,9 @@ try {
 ### After (@bhushanpawar/sqldb) - 5 lines with superpowers
 
 ```typescript
-import { createSmartDB } from '@bhushanpawar/sqldb';
+import { createSqlDB } from '@bhushanpawar/sqldb';
 
-const db = await createSmartDB({
+const db = await createSqlDB({
   mariadb: { host: 'localhost', user: 'root', password: 'password', database: 'mydb' },
   redis: { host: 'localhost' }
 });
@@ -1308,7 +1308,7 @@ const count = await db.users.count({ status: 'active' });
 
 - [ ] Install packages: `npm install @bhushanpawar/sqldb mariadb redis`
 - [ ] Set up Redis (if not already running)
-- [ ] Replace `mariadb.createPool()` with `createSmartDB()`
+- [ ] Replace `mariadb.createPool()` with `createSqlDB()`
 - [ ] Replace `conn.query()` with `db.table.findMany()`, `findById()`, etc.
 - [ ] Remove manual connection management (`getConnection()`, `release()`)
 - [ ] Remove manual caching logic (if any)
@@ -1325,8 +1325,8 @@ Real-world results from production deployments:
 ```
 Database Query:     200ms  🐌
 Manual Cache:        15ms  ⚠️
-SmartDB (cold):      45ms  ✅
-SmartDB (warm):     0.8ms  ⚡ 250x faster!
+SqlDB (cold):      45ms  ✅
+SqlDB (warm):     0.8ms  ⚡ 250x faster!
 ```
 
 ### Metrics That Matter
@@ -1381,13 +1381,13 @@ This section provides examples from simple to complex, helping you get started q
 
 ### 1. Hello World - Minimal Setup
 
-The simplest way to get started with SmartDB:
+The simplest way to get started with SqlDB:
 
 ```typescript
-import { createSmartDB } from '@bhushanpawar/sqldb';
+import { createSqlDB } from '@bhushanpawar/sqldb';
 
 // Initialize with minimal config
-const db = await createSmartDB({
+const db = await createSqlDB({
   mariadb: {
     host: 'localhost',
     user: 'root',
@@ -1419,9 +1419,9 @@ await db.close();
 Learn all the basic operations with caching:
 
 ```typescript
-import { createSmartDB } from '@bhushanpawar/sqldb';
+import { createSqlDB } from '@bhushanpawar/sqldb';
 
-const db = await createSmartDB({
+const db = await createSqlDB({
   mariadb: { host: 'localhost', user: 'root', password: 'password', database: 'mydb' },
   redis: { host: 'localhost' },
   cache: {
@@ -1472,7 +1472,7 @@ await db.close();
 Add full type safety to your queries:
 
 ```typescript
-import { createSmartDB, SmartDBWithTables } from '@bhushanpawar/sqldb';
+import { createSqlDB, SqlDBWithTables } from '@bhushanpawar/sqldb';
 
 // Define your schema
 interface User {
@@ -1496,8 +1496,8 @@ interface MySchema {
 }
 
 // Create typed DB instance
-type MyDB = SmartDBWithTables<MySchema>;
-const db = await createSmartDB(config) as MyDB;
+type MyDB = SqlDBWithTables<MySchema>;
+const db = await createSqlDB(config) as MyDB;
 
 // Full type safety!
 const users = await db.users.findMany();           // Type: User[]
@@ -1522,9 +1522,9 @@ await db.users.updateById(1, { status: 'verified' }); // Type-checked!
 Track query performance with correlation IDs:
 
 ```typescript
-import { createSmartDB, generateQueryId } from '@bhushanpawar/sqldb';
+import { createSqlDB, generateQueryId } from '@bhushanpawar/sqldb';
 
-const db = await createSmartDB({
+const db = await createSqlDB({
   mariadb: { /* config */ },
   redis: { /* config */ },
   logging: { level: 'info' },
@@ -1581,9 +1581,9 @@ db.clearQueries(correlationId);
 Monitor all database queries with detailed logging:
 
 ```typescript
-import { createSmartDB } from '@bhushanpawar/sqldb';
+import { createSqlDB } from '@bhushanpawar/sqldb';
 
-const db = await createSmartDB({
+const db = await createSqlDB({
   mariadb: {
     host: 'localhost',
     user: 'root',
@@ -1632,7 +1632,7 @@ Automatic cascade invalidation based on foreign keys:
 // posts (id, user_id, title)       ← FK to users
 // comments (id, post_id, content)  ← FK to posts
 
-const db = await createSmartDB({
+const db = await createSqlDB({
   mariadb: { /* config */ },
   redis: { /* config */ },
   cache: {
@@ -1648,7 +1648,7 @@ const db = await createSmartDB({
 // When you update a user...
 await (db as any).users.updateById(1, { name: 'Updated Name' });
 
-// SmartDB automatically invalidates:
+// SqlDB automatically invalidates:
 // 1. users:* (direct table)
 // 2. posts:* (depends on users via user_id)
 // 3. comments:* (depends on posts via post_id)
@@ -1674,14 +1674,14 @@ await invalidationManager.invalidateTable('users', { cascade: true });
 
 ### 7. Singleton Pattern for Production
 
-Share a single SmartDB instance across your entire application:
+Share a single SqlDB instance across your entire application:
 
 ```typescript
 // db.ts - Initialize once at app startup
-import { createSmartDB } from '@bhushanpawar/sqldb';
+import { createSqlDB } from '@bhushanpawar/sqldb';
 
 export const initializeDB = async () => {
-  const db = await createSmartDB({
+  const db = await createSqlDB({
     mariadb: { /* config */ },
     redis: { /* config */ },
     cache: { enabled: true },
@@ -1697,18 +1697,18 @@ const db = await initializeDB();
 console.log('Database initialized');
 
 // userController.ts - Access anywhere
-import { getSmartDB } from '@bhushanpawar/sqldb';
+import { getSqlDB } from '@bhushanpawar/sqldb';
 
 export const getUsers = async () => {
-  const db = getSmartDB(); // Returns the same instance
+  const db = getSqlDB(); // Returns the same instance
   return await (db as any).users.findMany();
 };
 
 // orderController.ts - Access anywhere
-import { getSmartDB } from '@bhushanpawar/sqldb';
+import { getSqlDB } from '@bhushanpawar/sqldb';
 
 export const getOrders = async (userId: number) => {
-  const db = getSmartDB(); // Same instance
+  const db = getSqlDB(); // Same instance
   return await (db as any).orders.findMany({ user_id: userId });
 };
 ```
@@ -1728,9 +1728,9 @@ export const getOrders = async (userId: number) => {
 Pre-warm cache on startup for frequently accessed queries:
 
 ```typescript
-import { createSmartDB } from '@bhushanpawar/sqldb';
+import { createSqlDB } from '@bhushanpawar/sqldb';
 
-const db = await createSmartDB({
+const db = await createSqlDB({
   mariadb: { /* config */ },
   redis: { /* config */ },
   cache: { enabled: true },
@@ -1776,9 +1776,9 @@ const user = await (db as any).users.findById(orders[0].user_id);
 Automatically warm cache for your hottest queries:
 
 ```typescript
-import { createSmartDB } from '@bhushanpawar/sqldb';
+import { createSqlDB } from '@bhushanpawar/sqldb';
 
-const db = await createSmartDB({
+const db = await createSqlDB({
   mariadb: { /* config */ },
   redis: { /* config */ },
   cache: { enabled: true },
@@ -1854,10 +1854,10 @@ console.log('Manual warming:', manualStats.queriesWarmed, 'queries');
 A real-world production setup with all features:
 
 ```typescript
-import { createSmartDB, generateQueryId } from '@bhushanpawar/sqldb';
+import { createSqlDB, generateQueryId } from '@bhushanpawar/sqldb';
 
 // Production configuration
-const db = await createSmartDB({
+const db = await createSqlDB({
   mariadb: {
     host: process.env.DB_HOST,
     port: parseInt(process.env.DB_PORT || '3306'),
@@ -2002,7 +2002,7 @@ For complete working examples, see the [examples](./examples) directory:
 ## Why You'll Love This
 
 ### Developer Experience
-- ✅ **Zero Learning Curve** - If you know SQL, you know SmartDB
+- ✅ **Zero Learning Curve** - If you know SQL, you know SqlDB
 - ✅ **TypeScript First** - Full type safety with autocomplete
 - ✅ **Beautiful Logs** - See performance at a glance
 - ✅ **Debugging Tools** - Find slow queries in seconds
@@ -2086,7 +2086,7 @@ npm test
 - 📧 **Email**: For private inquiries
 
 ### Show Your Support
-If SmartDB saves you time and money:
+If SqlDB saves you time and money:
 - ⭐ **Star this repo** on GitHub
 - 🐦 **Tweet** about your experience
 - 📝 **Write** a blog post

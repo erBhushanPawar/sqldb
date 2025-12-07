@@ -1,4 +1,4 @@
-import { SmartDBClient } from '../client';
+import { SqlDBClient } from '../client';
 import { TableSchema } from '../types/schema';
 
 export interface GenerateSchemaOptions {
@@ -9,9 +9,9 @@ export interface GenerateSchemaOptions {
 }
 
 export class SchemaGenerator {
-  private client: SmartDBClient;
+  private client: SqlDBClient;
 
-  constructor(client: SmartDBClient) {
+  constructor(client: SqlDBClient) {
     this.client = client;
   }
 
@@ -125,14 +125,14 @@ export class SchemaGenerator {
 
     // Numeric types
     if (type.includes('int') || type.includes('decimal') || type.includes('float') ||
-        type.includes('double') || type.includes('numeric')) {
+      type.includes('double') || type.includes('numeric')) {
       return 'number';
     }
 
     // String types
     if (type.includes('char') || type.includes('text') || type.includes('varchar') ||
-        type.includes('binary') || type.includes('blob') || type.includes('enum') ||
-        type.includes('set')) {
+      type.includes('binary') || type.includes('blob') || type.includes('enum') ||
+      type.includes('set')) {
       return 'string';
     }
 
@@ -156,19 +156,19 @@ export class SchemaGenerator {
   }
 
   /**
-   * Generate schema with SmartDBWithTables type
+   * Generate schema with SqlDBWithTables type
    */
   generateCompleteSchema(options: GenerateSchemaOptions = {}): string {
     const interfaceName = options.interfaceName || 'DatabaseSchema';
     const interfaceCode = this.generateTypeScriptInterface(options);
 
     const lines: string[] = [];
-    lines.push("import { SmartDBWithTables } from '@bhushanpawar/sqldb';");
+    lines.push("import { SqlDBWithTables } from '@bhushanpawar/sqldb';");
     lines.push('');
     lines.push(interfaceCode);
     lines.push('');
     lines.push(`// Type for your database client`);
-    lines.push(`export type DB = SmartDBWithTables<${interfaceName}>;`);
+    lines.push(`export type DB = SqlDBWithTables<${interfaceName}>;`);
 
     return lines.join('\n');
   }
@@ -185,10 +185,10 @@ export class SchemaGenerator {
     lines.push('/**');
     lines.push(' * Usage example:');
     lines.push(' *');
-    lines.push(" * import { createSmartDB } from '@bhushanpawar/sqldb';");
+    lines.push(" * import { createSqlDB } from '@bhushanpawar/sqldb';");
     lines.push(' * import { DB } from "./db-schema";');
     lines.push(' *');
-    lines.push(' * const db = await createSmartDB(config) as DB;');
+    lines.push(' * const db = await createSqlDB(config) as DB;');
     lines.push(' *');
     lines.push(' * // Now you have full type safety:');
 

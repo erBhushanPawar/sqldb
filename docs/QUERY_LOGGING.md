@@ -17,7 +17,7 @@ Beautiful, categorized query logging with performance indicators and automatic s
 Enable query logging by adding `logging: true` to your MariaDB config:
 
 ```typescript
-const db = await createSmartDB({
+const db = await createSqlDB({
   mariadb: {
     host: 'localhost',
     user: 'root',
@@ -199,7 +199,7 @@ logging: {
 Enable logging to understand query patterns:
 
 ```typescript
-const db = await createSmartDB({
+const db = await createSqlDB({
   mariadb: {
     logging: true,  // Always on in dev
   },
@@ -212,7 +212,7 @@ const db = await createSmartDB({
 Log only slow queries:
 
 ```typescript
-const db = await createSmartDB({
+const db = await createSqlDB({
   mariadb: {
     logging: true,
   },
@@ -227,7 +227,7 @@ const db = await createSmartDB({
 Enable logging to track query performance:
 
 ```typescript
-const db = await createSmartDB({
+const db = await createSqlDB({
   mariadb: {
     logging: true,
   },
@@ -250,7 +250,7 @@ console.log(`Total time: ${end - start}ms`);
 Send logs to your monitoring system:
 
 ```typescript
-import { createSmartDB } from '@bhushanpawar/sqldb';
+import { createSqlDB } from '@bhushanpawar/sqldb';
 
 // Override console.log to send to monitoring
 const originalLog = console.log;
@@ -264,7 +264,7 @@ console.log = (...args) => {
   }
 };
 
-const db = await createSmartDB({
+const db = await createSqlDB({
   mariadb: { logging: true },
 });
 ```
@@ -348,7 +348,7 @@ Enable logging in tests to verify queries:
 ```typescript
 describe('User queries', () => {
   beforeAll(async () => {
-    db = await createSmartDB({
+    db = await createSqlDB({
       mariadb: { logging: true },
     });
   });

@@ -1,5 +1,5 @@
 import { configDotenv } from "dotenv";
-import { createSmartDB, SmartDBWithTables } from "../src";
+import { createSqlDB, SqlDBWithTables } from "../src";
 
 // Define your database schema with proper types
 interface DatabaseSchema {
@@ -35,7 +35,7 @@ interface DatabaseSchema {
 }
 
 // Type your database client with your schema
-type MyDatabase = SmartDBWithTables<DatabaseSchema>;
+type MyDatabase = SqlDBWithTables<DatabaseSchema>;
 
 async function typedTablesExample() {
     configDotenv();
@@ -49,7 +49,7 @@ async function typedTablesExample() {
     console.log('=== Typed Dynamic Table Access Example ===\n');
 
     // Create database with proper typing
-    const db = await createSmartDB({
+    const db = await createSqlDB({
         mariadb: {
             host: dbConfig.host,
             port: dbConfig.port,

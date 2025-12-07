@@ -150,9 +150,9 @@ No changes required. The feature is opt-in and backwards compatible.
 ### To Start Using Query Tracking
 
 ```typescript
-import { createSmartDB, generateQueryId } from '@bhushanpawar/sqldb';
+import { createSqlDB, generateQueryId } from '@bhushanpawar/sqldb';
 
-const db = await createSmartDB(config);
+const db = await createSqlDB(config);
 
 // Generate a correlation ID
 const correlationId = generateQueryId();

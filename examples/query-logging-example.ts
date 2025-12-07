@@ -1,5 +1,5 @@
 import { configDotenv } from 'dotenv';
-import { createSmartDB } from '../src';
+import { createSqlDB } from '../src';
 
 async function queryLoggingExample() {
   configDotenv();
@@ -20,7 +20,7 @@ async function queryLoggingExample() {
   console.log('  - Automatic SQL display for slow queries (>200ms)\n');
 
   // Create DB with logging enabled
-  const db = await createSmartDB({
+  const db = await createSqlDB({
     mariadb: {
       host: dbConfig.host,
       port: dbConfig.port,

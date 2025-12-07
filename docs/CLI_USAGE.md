@@ -167,7 +167,7 @@ DB_DATABASE=myapp_dev
 ### Default Output (With Comments)
 
 ```typescript
-import { SmartDBWithTables } from '@bhushanpawar/sqldb';
+import { SqlDBWithTables } from '@bhushanpawar/sqldb';
 
 /**
  * Auto-generated database schema
@@ -194,7 +194,7 @@ export interface DatabaseSchema {
 }
 
 // Type for your database client
-export type DB = SmartDBWithTables<DatabaseSchema>;
+export type DB = SqlDBWithTables<DatabaseSchema>;
 ```
 
 ### Without Comments
@@ -219,10 +219,10 @@ Includes usage instructions at the end:
 /**
  * Usage example:
  *
- * import { createSmartDB } from '@bhushanpawar/sqldb';
+ * import { createSqlDB } from '@bhushanpawar/sqldb';
  * import { DB } from "./db-schema";
  *
- * const db = await createSmartDB(config) as DB;
+ * const db = await createSqlDB(config) as DB;
  *
  * // Now you have full type safety:
  * const users = await db.users.findMany();
@@ -453,14 +453,14 @@ For complex setups, create a custom script:
 
 ```typescript
 // scripts/generate-custom-schema.ts
-import { createSmartDB } from '@bhushanpawar/sqldb';
+import { createSqlDB } from '@bhushanpawar/sqldb';
 import { configDotenv } from 'dotenv';
 import * as fs from 'fs';
 
 configDotenv();
 
 async function generate() {
-  const db = await createSmartDB({
+  const db = await createSqlDB({
     mariadb: {
       host: process.env.DB_HOST!,
       user: process.env.DB_USER!,

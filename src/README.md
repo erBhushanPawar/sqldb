@@ -21,9 +21,9 @@ npm install @bhushanpawar/sqldb mariadb ioredis
 ## Quick Start
 
 ```typescript
-import { createSmartDB } from '@bhushanpawar/sqldb';
+import { createSqlDB } from '@bhushanpawar/sqldb';
 
-const db = await createSmartDB({
+const db = await createSqlDB({
   mariadb: {
     host: 'localhost',
     user: 'root',
@@ -52,7 +52,7 @@ await db.close();
 ### Full Configuration Options
 
 ```typescript
-const db = await createSmartDB({
+const db = await createSqlDB({
   // MariaDB connection settings
   mariadb: {
     host: 'localhost',
@@ -522,7 +522,7 @@ Key differences:
                                 │
                                 ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                      SmartDBClient (Main API)                    │
+│                      SqlDBClient (Main API)                    │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────────┐  │
 │  │ QueryBuilder│  │ CacheManager│  │ RelationshipDiscovery   │  │
 │  └─────────────┘  └─────────────┘  └─────────────────────────┘  │

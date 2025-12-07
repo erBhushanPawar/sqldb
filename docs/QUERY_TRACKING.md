@@ -35,7 +35,7 @@ interface QueryMetadata {
 ### Accessing Query Tracker
 
 ```typescript
-const db = await createSmartDB(config);
+const db = await createSqlDB(config);
 
 // The query tracker is available on the client
 const allQueries = db.getQueries();
@@ -63,7 +63,7 @@ console.log(`Executed ${queries.length} queries for this operation`);
 
 ## API Reference
 
-### SmartDBClient Methods
+### SqlDBClient Methods
 
 #### `getQueries(correlationId?: string): QueryMetadata[]`
 
@@ -366,7 +366,7 @@ class CustomQueryTracker implements QueryTracker {
 }
 
 // Use custom tracker
-const db = await createSmartDB(config);
+const db = await createSqlDB(config);
 db.queryTracker = new CustomQueryTracker();
 ```
 

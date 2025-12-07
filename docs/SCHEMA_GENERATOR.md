@@ -14,9 +14,9 @@ Automatically generate TypeScript interfaces from your MariaDB database schema w
 ## Quick Start
 
 ```typescript
-import { createSmartDB } from '@bhushanpawar/sqldb';
+import { createSqlDB } from '@bhushanpawar/sqldb';
 
-const db = await createSmartDB(config);
+const db = await createSqlDB(config);
 
 // Generate schema with all metadata
 const schema = db.generateSchema({
@@ -112,11 +112,11 @@ Create a script to generate and save your schema:
 
 ```typescript
 // scripts/generate-schema.ts
-import { createSmartDB } from '@bhushanpawar/sqldb';
+import { createSqlDB } from '@bhushanpawar/sqldb';
 import * as fs from 'fs';
 
 async function generateSchema() {
-  const db = await createSmartDB({
+  const db = await createSqlDB({
     mariadb: {
       host: 'localhost',
       user: 'root',
@@ -162,13 +162,13 @@ npx ts-node scripts/generate-schema.ts
 Once you've generated your schema, use it for full type safety:
 
 ```typescript
-import { createSmartDB, SmartDBWithTables } from '@bhushanpawar/sqldb';
+import { createSqlDB, SqlDBWithTables } from '@bhushanpawar/sqldb';
 import { MyDatabaseSchema } from './db-schema';
 
 // Type your database
-type DB = SmartDBWithTables<MyDatabaseSchema>;
+type DB = SqlDBWithTables<MyDatabaseSchema>;
 
-const db = await createSmartDB(config) as DB;
+const db = await createSqlDB(config) as DB;
 
 // Now you have full type safety and autocomplete!
 const users = await db.users.findMany();
@@ -228,7 +228,7 @@ If your database schema changes:
 Generate schema for specific tables only:
 
 ```typescript
-const db = await createSmartDB({
+const db = await createSqlDB({
   // ... config
   discovery: {
     autoDiscover: true,
@@ -301,7 +301,7 @@ git commit -m "Add user preferences table"
 
 ### vs Prisma
 
-| Feature | SmartDB Schema Generator | Prisma |
+| Feature | SqlDB Schema Generator | Prisma |
 |---------|-------------------------|--------|
 | Source of truth | Database | Schema file |
 | Sync direction | DB → Code | Code → DB |
@@ -311,7 +311,7 @@ git commit -m "Add user preferences table"
 
 ### vs TypeORM
 
-| Feature | SmartDB Schema Generator | TypeORM |
+| Feature | SqlDB Schema Generator | TypeORM |
 |---------|-------------------------|---------|
 | Approach | Interface generation | Entity decorators |
 | Runtime overhead | Zero | Reflection metadata |
@@ -320,7 +320,7 @@ git commit -m "Add user preferences table"
 
 ### vs Kysely
 
-| Feature | SmartDB Schema Generator | Kysely |
+| Feature | SqlDB Schema Generator | Kysely |
 |---------|-------------------------|--------|
 | Type inference | Generated interfaces | Manual types |
 | Setup effort | One command | Manual typing |

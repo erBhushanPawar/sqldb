@@ -1,12 +1,12 @@
 import { describe, it, before, after } from 'mocha';
 import { expect } from 'chai';
 import * as dotenv from 'dotenv';
-import { createSmartDB, SmartDBClient } from '../src/index';
+import { createSqlDB, SqlDBClient } from '../src/index';
 
 dotenv.config();
 
 describe('Performance Tests', () => {
-  let client: any; // SmartDBClient with dynamic table accessors
+  let client: any; // SqlDBClient with dynamic table accessors
   const TEST_ITERATIONS = 1000;
   const TARGET_TIME_MS = 60000; // 1 minute
 
@@ -22,7 +22,7 @@ describe('Performance Tests', () => {
     const dbConfig = JSON.parse(dbConfigStr);
 
     // First, create a temporary client to set up the table
-    const tempClient = await createSmartDB({
+    const tempClient = await createSqlDB({
       mariadb: {
         host: dbConfig.host,
         port: dbConfig.port,
@@ -77,10 +77,10 @@ describe('Performance Tests', () => {
     console.log('Test data ready');
 
     // Close temp client
-    await (tempClient as SmartDBClient).close();
+    await (tempClient as SqlDBClient).close();
 
     // Now create the actual client with discovery enabled
-    client = await createSmartDB({
+    client = await createSqlDB({
       mariadb: {
         host: dbConfig.host,
         port: dbConfig.port,
@@ -110,8 +110,8 @@ describe('Performance Tests', () => {
       },
     });
 
-    console.log('SmartDB client initialized with performance_test table');
-    console.log('Discovered tables:', (client as SmartDBClient).getDiscoveredTables());
+    console.log('SqlDB client initialized with performance_test table');
+    console.log('Discovered tables:', (client as SqlDBClient).getDiscoveredTables());
   });
 
   after(async function () {
@@ -119,7 +119,7 @@ describe('Performance Tests', () => {
     if (client) {
       const rawDbManager = (client as any).dbManager;
       await rawDbManager.query('DROP TABLE IF EXISTS performance_test');
-      await (client as SmartDBClient).close();
+      await (client as SqlDBClient).close();
     }
   });
 
@@ -127,7 +127,7 @@ describe('Performance Tests', () => {
     it('should handle 1000 cached reads within 60 seconds', async function () {
       this.timeout(TARGET_TIME_MS + 20000);
 
-      const perfTable = (client as SmartDBClient).getTableOperations('performance_test');
+      const perfTable = (client as SqlDBClient).getTableOperations('performance_test');
 
       // Warm up the cache first to get realistic cached performance
       console.log('\n🔥 Warming up cache with sample queries...');
@@ -184,11 +184,11 @@ describe('Performance Tests', () => {
       this.timeout(30000);
 
       const iterations = 50;
-      const perfTable = (client as SmartDBClient).getTableOperations('performance_test');
+      const perfTable = (client as SqlDBClient).getTableOperations('performance_test');
       const rawDbManager = (client as any).dbManager;
 
       // Clear Redis cache to start fresh
-      const cacheManager = (client as SmartDBClient).getCacheManager();
+      const cacheManager = (client as SqlDBClient).getCacheManager();
       await cacheManager.clear();
 
       console.log('\n📊 Running cache vs direct DB comparison...');
@@ -240,7 +240,7 @@ describe('Performance Tests', () => {
       const startTime = Date.now();
       const promises: Promise<any>[] = [];
       const rawDbManager = (client as any).dbManager;
-      const perfTable = (client as SmartDBClient).getTableOperations('performance_test');
+      const perfTable = (client as SqlDBClient).getTableOperations('performance_test');
 
       for (let i = 0; i < operations; i++) {
         const opType = i % 3;
@@ -258,7 +258,7 @@ describe('Performance Tests', () => {
         } else {
           // Another read query
           promises.push(
-            perfTable.findMany({ }, { limit: 5 })
+            perfTable.findMany({}, { limit: 5 })
           );
         }
       }
@@ -281,7 +281,7 @@ describe('Performance Tests', () => {
 
       const burstSize = 200;
       const bursts = 5;
-      const perfTable = (client as SmartDBClient).getTableOperations('performance_test');
+      const perfTable = (client as SqlDBClient).getTableOperations('performance_test');
 
       console.log(`\n💥 Running ${bursts} bursts of ${burstSize} requests each...`);
 
@@ -315,7 +315,7 @@ describe('Performance Tests', () => {
       this.timeout(20000);
 
       const iterations = 200;
-      const perfTable = (client as SmartDBClient).getTableOperations('performance_test');
+      const perfTable = (client as SqlDBClient).getTableOperations('performance_test');
       console.log(`\n🔍 Testing findMany (${iterations} operations)...`);
 
       const startTime = Date.now();
@@ -326,7 +326,7 @@ describe('Performance Tests', () => {
 
         if (opType === 0) {
           promises.push(
-            perfTable.findMany({ }, { limit: 10 })
+            perfTable.findMany({}, { limit: 10 })
           );
         } else if (opType === 1) {
           promises.push(
@@ -359,7 +359,7 @@ describe('Performance Tests', () => {
     it('should maintain performance under sustained load', async function () {
       this.timeout(40000);
 
-      const perfTable = (client as SmartDBClient).getTableOperations('performance_test');
+      const perfTable = (client as SqlDBClient).getTableOperations('performance_test');
       const durationSeconds = 10;
       const targetRPS = 100; // Target requests per second
 

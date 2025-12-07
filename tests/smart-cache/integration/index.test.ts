@@ -1,4 +1,4 @@
-import { createSmartDB, SmartDBClient } from '../../../src/index';
+import { createSqlDB, SqlDBClient } from '../../../src/index';
 import * as smartCacheExports from '../../../src/index';
 
 // Mock all dependencies
@@ -12,12 +12,12 @@ describe('Smart Cache Index Exports', () => {
   beforeEach(() => {
     jest.clearAllMocks();
 
-    // Mock SmartDBClient initialization
-    (SmartDBClient.prototype.initialize as jest.Mock) = jest.fn().mockResolvedValue(undefined);
+    // Mock SqlDBClient initialization
+    (SqlDBClient.prototype.initialize as jest.Mock) = jest.fn().mockResolvedValue(undefined);
   });
 
-  describe('createSmartDB', () => {
-    it('should create and initialize SmartDBClient', async () => {
+  describe('createSqlDB', () => {
+    it('should create and initialize SqlDBClient', async () => {
       const config = {
         mariadb: {
           host: 'localhost',
@@ -31,20 +31,20 @@ describe('Smart Cache Index Exports', () => {
         },
       };
 
-      const client = await createSmartDB(config);
+      const client = await createSqlDB(config);
 
-      expect(client).toBeInstanceOf(SmartDBClient);
-      expect(SmartDBClient.prototype.initialize).toHaveBeenCalled();
+      expect(client).toBeInstanceOf(SqlDBClient);
+      expect(SqlDBClient.prototype.initialize).toHaveBeenCalled();
     });
   });
 
   describe('Exports', () => {
-    it('should export SmartDBClient', () => {
-      expect(smartCacheExports.SmartDBClient).toBeDefined();
+    it('should export SqlDBClient', () => {
+      expect(smartCacheExports.SqlDBClient).toBeDefined();
     });
 
-    it('should export createSmartDB function', () => {
-      expect(typeof smartCacheExports.createSmartDB).toBe('function');
+    it('should export createSqlDB function', () => {
+      expect(typeof smartCacheExports.createSqlDB).toBe('function');
     });
 
     it('should export type definitions', () => {
@@ -58,8 +58,8 @@ describe('Smart Cache Index Exports', () => {
 
     it('should export default object', () => {
       expect(smartCacheExports.default).toBeDefined();
-      expect(smartCacheExports.default.createSmartDB).toBe(smartCacheExports.createSmartDB);
-      expect(smartCacheExports.default.SmartDBClient).toBe(smartCacheExports.SmartDBClient);
+      expect(smartCacheExports.default.createSqlDB).toBe(smartCacheExports.createSqlDB);
+      expect(smartCacheExports.default.SqlDBClient).toBe(smartCacheExports.SqlDBClient);
     });
   });
 });

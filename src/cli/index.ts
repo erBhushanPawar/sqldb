@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { configDotenv } from 'dotenv';
-import { createSmartDB } from '../index';
+import { createSqlDB } from '../index';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -82,7 +82,7 @@ async function generateSchema(options: CliOptions = {}) {
       };
     }
 
-    const db = await createSmartDB(config);
+    const db = await createSqlDB(config);
 
     const tables = db.getDiscoveredTables();
     console.log(`✅ Discovered ${tables.length} tables\n`);
@@ -117,10 +117,10 @@ async function generateSchema(options: CliOptions = {}) {
     // Show usage
     console.log('🚀 Next steps:\n');
     console.log('1. Import and use in your code:\n');
-    console.log('   import { createSmartDB, SmartDBWithTables } from "@bhushanpawar/sqldb";');
+    console.log('   import { createSqlDB, SqlDBWithTables } from "@bhushanpawar/sqldb";');
     console.log('   import { DatabaseSchema } from "./db-schema";\n');
-    console.log('   type DB = SmartDBWithTables<DatabaseSchema>;');
-    console.log('   const db = await createSmartDB(config) as DB;\n');
+    console.log('   type DB = SqlDBWithTables<DatabaseSchema>;');
+    console.log('   const db = await createSqlDB(config) as DB;\n');
     console.log('   // Full type safety!');
     const sampleTables = tables.slice(0, 3);
     for (const table of sampleTables) {
@@ -141,7 +141,7 @@ async function main() {
 
   if (!command || command === '--help' || command === '-h') {
     console.log('');
-    console.log('SmartDB CLI - Database Schema Generator');
+    console.log('SqlDB CLI - Database Schema Generator');
     console.log('');
     console.log('Usage:');
     console.log('  npx @bhushanpawar/sqldb --generate-schema [options]');

@@ -25,11 +25,11 @@ npx @bhushanpawar/sqldb --generate-schema
 ### Step 3: Use it!
 
 ```typescript
-import { createSmartDB, SmartDBWithTables } from '@bhushanpawar/sqldb';
+import { createSqlDB, SqlDBWithTables } from '@bhushanpawar/sqldb';
 import { DatabaseSchema } from './db-schema';
 
-type DB = SmartDBWithTables<DatabaseSchema>;
-const db = await createSmartDB(config) as DB;
+type DB = SqlDBWithTables<DatabaseSchema>;
+const db = await createSqlDB(config) as DB;
 
 // Full type safety! ✨
 const users = await db.users.findMany();

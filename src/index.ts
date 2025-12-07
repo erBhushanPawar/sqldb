@@ -1,13 +1,13 @@
-import { SmartDBClient } from './client';
-import { SmartDBConfig } from './types/config';
+import { SqlDBClient } from './client';
+import { SqlDBConfig } from './types/config';
 
 // Singleton instance storage
-let singletonInstance: SmartDBClient | null = null;
+let singletonInstance: SqlDBClient | null = null;
 
-export async function createSmartDB(
-  config: SmartDBConfig,
+export async function createSqlDB(
+  config: SqlDBConfig,
   options?: { singleton?: boolean }
-): Promise<SmartDBClient> {
+): Promise<SqlDBClient> {
   // If singleton mode is enabled and instance exists, return it
   if (options?.singleton) {
     if (singletonInstance) {
@@ -15,7 +15,7 @@ export async function createSmartDB(
     }
 
     // Create and store singleton instance
-    const client = new SmartDBClient(config);
+    const client = new SqlDBClient(config);
     await client.initialize();
 
     // Wrap in Proxy for dynamic table access
@@ -25,7 +25,7 @@ export async function createSmartDB(
   }
 
   // Non-singleton mode: create new instance
-  const client = new SmartDBClient(config);
+  const client = new SqlDBClient(config);
   await client.initialize();
 
   // Wrap in Proxy for dynamic table access
@@ -33,7 +33,7 @@ export async function createSmartDB(
 }
 
 // Create a proxied client that allows dynamic table access (db.users, db.orders, etc.)
-function createProxiedClient(client: SmartDBClient): SmartDBClient {
+function createProxiedClient(client: SqlDBClient): SqlDBClient {
   return new Proxy(client, {
     get(target, prop: string | symbol) {
       // If prop is a symbol or starts with underscore, return from target
@@ -58,26 +58,26 @@ function createProxiedClient(client: SmartDBClient): SmartDBClient {
 
       return undefined;
     },
-  }) as SmartDBClient;
+  }) as SqlDBClient;
 }
 
 // Get the singleton instance (throws if not initialized)
-export function getSmartDB(): SmartDBClient {
+export function getSqlDB(): SqlDBClient {
   if (!singletonInstance) {
     throw new Error(
-      'Singleton SmartDB instance not initialized. Call createSmartDB({ ... }, { singleton: true }) first.'
+      'Singleton SqlDB instance not initialized. Call createSqlDB({ ... }, { singleton: true }) first.'
     );
   }
   return singletonInstance;
 }
 
 // Clear singleton instance (useful for testing or reconnecting)
-export function clearSmartDBSingleton(): void {
+export function clearSqlDBSingleton(): void {
   singletonInstance = null;
 }
 
 // Export main client class
-export { SmartDBClient } from './client';
+export { SqlDBClient } from './client';
 
 // Export all type definitions
 export * from './types/config';
@@ -97,8 +97,8 @@ export { SchemaGenerator } from './cli/schema-generator';
 
 // Default export
 export default {
-  createSmartDB,
-  getSmartDB,
-  clearSmartDBSingleton,
-  SmartDBClient,
+  createSqlDB,
+  getSqlDB,
+  clearSqlDBSingleton,
+  SqlDBClient,
 };

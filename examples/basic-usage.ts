@@ -1,8 +1,8 @@
-import { createSmartDB } from '../src/index';
+import { createSqlDB } from '../src/index';
 
 async function basicUsageExample() {
   // Initialize the smart cache client
-  const db = await createSmartDB({
+  const db = await createSqlDB({
     mariadb: {
       host: 'localhost',
       user: 'root',

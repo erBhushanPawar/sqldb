@@ -1,15 +1,15 @@
 # Dynamic Table Access
 
-Access your database tables directly as properties on the SmartDB client, with full TypeScript support.
+Access your database tables directly as properties on the SqlDB client, with full TypeScript support.
 
 ## Quick Start
 
 ### Without Types (Basic)
 
 ```typescript
-import { createSmartDB } from '@bhushanpawar/sqldb';
+import { createSqlDB } from '@bhushanpawar/sqldb';
 
-const db = await createSmartDB(config);
+const db = await createSqlDB(config);
 
 // Access tables dynamically
 const users = await db.users.findMany();
@@ -20,7 +20,7 @@ const product = await db.products.findById(123);
 ### With Types (Recommended)
 
 ```typescript
-import { createSmartDB, SmartDBWithTables } from '@bhushanpawar/sqldb';
+import { createSqlDB, SqlDBWithTables } from '@bhushanpawar/sqldb';
 
 // Define your schema
 interface DatabaseSchema {
@@ -44,9 +44,9 @@ interface DatabaseSchema {
 }
 
 // Type your database
-type MyDB = SmartDBWithTables<DatabaseSchema>;
+type MyDB = SqlDBWithTables<DatabaseSchema>;
 
-const db = await createSmartDB(config) as MyDB;
+const db = await createSqlDB(config) as MyDB;
 
 // Now you have full type safety!
 const users = await db.users.findMany(); // Type: DatabaseSchema['users'][]
@@ -77,7 +77,7 @@ const orders = await db.orders.findMany({ status: 'pending' });
 ## Full Example
 
 ```typescript
-import { createSmartDB, SmartDBWithTables } from '@bhushanpawar/sqldb';
+import { createSqlDB, SqlDBWithTables } from '@bhushanpawar/sqldb';
 
 interface MySchema {
   users: {
@@ -93,9 +93,9 @@ interface MySchema {
   };
 }
 
-type MyDB = SmartDBWithTables<MySchema>;
+type MyDB = SqlDBWithTables<MySchema>;
 
-const db = await createSmartDB({
+const db = await createSqlDB({
   mariadb: {
     host: 'localhost',
     port: 3306,
@@ -158,7 +158,7 @@ const results = await db.users.raw(
 ### 1. Autocomplete
 
 ```typescript
-const db = await createSmartDB(config) as MyDB;
+const db = await createSqlDB(config) as MyDB;
 
 // IDE shows all available tables
 db.users.     // ← Autocomplete suggests: findMany, findOne, findById, etc.
@@ -189,9 +189,9 @@ Hover over any method to see full documentation and type information.
 If you don't know your schema at compile time:
 
 ```typescript
-import { SmartDBWithDynamicTables } from '@bhushanpawar/sqldb';
+import { SqlDBWithDynamicTables } from '@bhushanpawar/sqldb';
 
-const db = await createSmartDB(config) as SmartDBWithDynamicTables;
+const db = await createSqlDB(config) as SqlDBWithDynamicTables;
 
 // Works, but no type safety
 const data = await db.anyTable.findMany();
@@ -210,9 +210,9 @@ interface MyPartialSchema {
   // Don't define tables you don't use
 }
 
-type MyDB = SmartDBWithTables<MyPartialSchema>;
+type MyDB = SqlDBWithTables<MyPartialSchema>;
 
-const db = await createSmartDB(config) as MyDB;
+const db = await createSqlDB(config) as MyDB;
 
 // Typed access for defined tables
 await db.users.findMany();
@@ -292,8 +292,8 @@ interface MySchema {
   orders: { id: number; total: number };
 }
 
-type MyDB = SmartDBWithTables<MySchema>;
-const db = await createSmartDB(config) as MyDB;
+type MyDB = SqlDBWithTables<MySchema>;
+const db = await createSqlDB(config) as MyDB;
 
 // Use dynamic access
 const users = await db.users.findMany();
@@ -306,8 +306,8 @@ const users = await db.users.findMany();
 const users = await (db as any).users.findMany();
 
 // Instead, define proper types
-type MyDB = SmartDBWithTables<MySchema>;
-const db = await createSmartDB(config) as MyDB;
+type MyDB = SqlDBWithTables<MySchema>;
+const db = await createSqlDB(config) as MyDB;
 const users = await db.users.findMany(); // Fully typed!
 ```
 
@@ -332,10 +332,10 @@ export interface AppSchema {
   products: ProductModel;
 }
 
-export type AppDB = SmartDBWithTables<AppSchema>;
+export type AppDB = SqlDBWithTables<AppSchema>;
 
 export async function createDatabase(): Promise<AppDB> {
-  return await createSmartDB(config) as AppDB;
+  return await createSqlDB(config) as AppDB;
 }
 
 // user.service.ts
@@ -382,16 +382,16 @@ export class UserRepository {
 
 ```typescript
 // database.ts
-import { createSmartDB, getSmartDB, SmartDBWithTables } from '@bhushanpawar/sqldb';
+import { createSqlDB, getSqlDB, SqlDBWithTables } from '@bhushanpawar/sqldb';
 
-type AppDB = SmartDBWithTables<AppSchema>;
+type AppDB = SqlDBWithTables<AppSchema>;
 
 export async function initDatabase(): Promise<AppDB> {
-  return await createSmartDB(config, { singleton: true }) as AppDB;
+  return await createSqlDB(config, { singleton: true }) as AppDB;
 }
 
 export function getDatabase(): AppDB {
-  return getSmartDB() as AppDB;
+  return getSqlDB() as AppDB;
 }
 
 // usage.ts
@@ -405,16 +405,16 @@ const users = await db.users.findMany(); // Fully typed!
 
 ### Q: Why do I get "Property 'users' does not exist"?
 
-**A:** You need to type your database with `SmartDBWithTables`:
+**A:** You need to type your database with `SqlDBWithTables`:
 
 ```typescript
 // Wrong
-const db = await createSmartDB(config);
+const db = await createSqlDB(config);
 await db.users.findMany(); // Error!
 
 // Right
-type MyDB = SmartDBWithTables<MySchema>;
-const db = await createSmartDB(config) as MyDB;
+type MyDB = SqlDBWithTables<MySchema>;
+const db = await createSqlDB(config) as MyDB;
 await db.users.findMany(); // Works!
 ```
 
@@ -423,7 +423,7 @@ await db.users.findMany(); // Works!
 **A:** Yes! Dynamic table access works in JavaScript too:
 
 ```javascript
-const db = await createSmartDB(config);
+const db = await createSqlDB(config);
 const users = await db.users.findMany(); // Works!
 ```
 
@@ -434,11 +434,11 @@ You just won't get type checking and autocomplete.
 **A:** Yes!
 
 ```typescript
-const db = await createSmartDB(config, { singleton: true }) as MyDB;
+const db = await createSqlDB(config, { singleton: true }) as MyDB;
 const users = await db.users.findMany(); // Works!
 
 // Later, anywhere in your app
-const db2 = getSmartDB() as MyDB;
+const db2 = getSqlDB() as MyDB;
 const orders = await db2.orders.findMany(); // Works!
 ```
 

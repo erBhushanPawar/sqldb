@@ -1,12 +1,12 @@
 import { TableProxyFactory, createTableProxy } from '../../../src/query/table-proxy';
-import { SmartDBClient } from '../../../src/client';
+import { SqlDBClient } from '../../../src/client';
 import { TableOperations } from '../../../src/types/query';
 
-// Mock SmartDBClient
+// Mock SqlDBClient
 jest.mock('../../../src/client');
 
 describe('Table Proxy Integration', () => {
-  let mockClient: jest.Mocked<SmartDBClient>;
+  let mockClient: jest.Mocked<SqlDBClient>;
   let mockOperations: TableOperations;
 
   beforeEach(() => {
@@ -28,7 +28,7 @@ describe('Table Proxy Integration', () => {
       warmCache: jest.fn(),
     };
 
-    mockClient = new SmartDBClient(null as any) as jest.Mocked<SmartDBClient>;
+    mockClient = new SqlDBClient(null as any) as jest.Mocked<SqlDBClient>;
     mockClient.getTableOperations = jest.fn().mockReturnValue(mockOperations);
   });
 

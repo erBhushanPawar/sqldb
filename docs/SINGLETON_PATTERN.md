@@ -1,13 +1,13 @@
 # Singleton Pattern Usage
 
-The SmartDB library supports singleton pattern to ensure only one database connection instance is created and reused across your application.
+The SqlDB library supports singleton pattern to ensure only one database connection instance is created and reused across your application.
 
 ## Benefits
 
 ✅ **Single database connection pool** - Prevents connection exhaustion
 ✅ **Shared cache across application** - Better cache hit rates
 ✅ **Lower memory footprint** - One instance instead of multiple
-✅ **Easy access anywhere** - Use `getSmartDB()` to retrieve instance
+✅ **Easy access anywhere** - Use `getSqlDB()` to retrieve instance
 ✅ **Prevents duplicate schema discovery** - Schema is discovered once
 
 ## Usage
@@ -15,10 +15,10 @@ The SmartDB library supports singleton pattern to ensure only one database conne
 ### 1. Initialize Singleton
 
 ```typescript
-import { createSmartDB } from '@bhushanpawar/sqldb';
+import { createSqlDB } from '@bhushanpawar/sqldb';
 
 // Create singleton instance (only once in your app)
-const db = await createSmartDB({
+const db = await createSqlDB({
   mariadb: {
     host: 'localhost',
     port: 3306,
@@ -40,10 +40,10 @@ const db = await createSmartDB({
 ### 2. Access Singleton Anywhere
 
 ```typescript
-import { getSmartDB } from '@bhushanpawar/sqldb';
+import { getSqlDB } from '@bhushanpawar/sqldb';
 
 // In any file, get the singleton instance
-const db = getSmartDB();
+const db = getSqlDB();
 
 // Use it
 const users = db.getTableOperations('users');
@@ -53,20 +53,20 @@ const allUsers = await users.findMany();
 ### 3. Clear Singleton (Testing)
 
 ```typescript
-import { clearSmartDBSingleton } from '@bhushanpawar/sqldb';
+import { clearSqlDBSingleton } from '@bhushanpawar/sqldb';
 
 // Clear singleton (useful for testing or reconnecting)
-clearSmartDBSingleton();
+clearSqlDBSingleton();
 ```
 
 ## Complete Example
 
 ```typescript
 // app.ts (entry point)
-import { createSmartDB } from '@bhushanpawar/sqldb';
+import { createSqlDB } from '@bhushanpawar/sqldb';
 
 async function initializeDatabase() {
-  const db = await createSmartDB({
+  const db = await createSqlDB({
     mariadb: { /* config */ },
     redis: { /* config */ },
     cache: { enabled: true },
@@ -81,10 +81,10 @@ initializeDatabase().catch(console.error);
 
 ```typescript
 // users.service.ts
-import { getSmartDB } from '@bhushanpawar/sqldb';
+import { getSqlDB } from '@bhushanpawar/sqldb';
 
 export async function getAllUsers() {
-  const db = getSmartDB(); // Get singleton instance
+  const db = getSqlDB(); // Get singleton instance
   const usersTable = db.getTableOperations('users');
   return await usersTable.findMany();
 }
@@ -92,10 +92,10 @@ export async function getAllUsers() {
 
 ```typescript
 // orders.service.ts
-import { getSmartDB } from '@bhushanpawar/sqldb';
+import { getSqlDB } from '@bhushanpawar/sqldb';
 
 export async function getUserOrders(userId: string) {
-  const db = getSmartDB(); // Same instance as users.service.ts
+  const db = getSqlDB(); // Same instance as users.service.ts
   const ordersTable = db.getTableOperations('orders');
   return await ordersTable.findMany({ user_id: userId });
 }
@@ -107,8 +107,8 @@ If you need multiple independent connections (rare), omit the `singleton` option
 
 ```typescript
 // Each call creates a new instance
-const db1 = await createSmartDB(config); // New instance
-const db2 = await createSmartDB(config); // Another new instance
+const db1 = await createSqlDB(config); // New instance
+const db2 = await createSqlDB(config); // Another new instance
 
 console.log(db1 === db2); // false
 ```
@@ -119,13 +119,13 @@ console.log(db1 === db2); // false
 
 - Use singleton mode in production applications
 - Initialize singleton once at app startup
-- Use `getSmartDB()` to access the instance
+- Use `getSqlDB()` to access the instance
 - Close the connection on app shutdown
 
 ```typescript
 // Graceful shutdown
 process.on('SIGINT', async () => {
-  const db = getSmartDB();
+  const db = getSqlDB();
   await db.close();
   process.exit(0);
 });
@@ -135,19 +135,19 @@ process.on('SIGINT', async () => {
 
 - Create multiple singleton instances
 - Mix singleton and non-singleton modes
-- Call `createSmartDB({ ... }, { singleton: true })` multiple times with different configs
+- Call `createSqlDB({ ... }, { singleton: true })` multiple times with different configs
 
 ## Error Handling
 
 ```typescript
-import { getSmartDB } from '@bhushanpawar/sqldb';
+import { getSqlDB } from '@bhushanpawar/sqldb';
 
 try {
-  const db = getSmartDB();
+  const db = getSqlDB();
   // Use db
 } catch (error) {
-  // Error: Singleton SmartDB instance not initialized.
-  // Call createSmartDB first!
+  // Error: Singleton SqlDB instance not initialized.
+  // Call createSqlDB first!
   console.error(error.message);
 }
 ```
@@ -157,14 +157,14 @@ try {
 For tests, clear the singleton between test suites:
 
 ```typescript
-import { createSmartDB, clearSmartDBSingleton } from '@bhushanpawar/sqldb';
+import { createSqlDB, clearSqlDBSingleton } from '@bhushanpawar/sqldb';
 
 afterEach(() => {
-  clearSmartDBSingleton(); // Reset for next test
+  clearSqlDBSingleton(); // Reset for next test
 });
 
 it('should create singleton', async () => {
-  const db = await createSmartDB(config, { singleton: true });
+  const db = await createSqlDB(config, { singleton: true });
   expect(db).toBeDefined();
 });
 ```

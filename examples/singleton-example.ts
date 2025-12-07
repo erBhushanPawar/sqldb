@@ -1,5 +1,5 @@
 import { configDotenv } from "dotenv";
-import { createSmartDB, getSmartDB, clearSmartDBSingleton } from "../src";
+import { createSqlDB, getSqlDB, clearSqlDBSingleton } from "../src";
 
 async function singletonExample() {
     configDotenv();
@@ -14,7 +14,7 @@ async function singletonExample() {
 
     // Example 1: Initialize singleton
     console.log('1. Creating singleton instance...');
-    const db1 = await createSmartDB({
+    const db1 = await createSqlDB({
         mariadb: {
             host: dbConfig.host,
             port: dbConfig.port,
@@ -44,7 +44,7 @@ async function singletonExample() {
 
     // Example 2: Try to create another instance (should return same instance)
     console.log('2. Attempting to create another instance...');
-    const db2 = await createSmartDB({
+    const db2 = await createSqlDB({
         mariadb: {
             host: dbConfig.host,
             port: dbConfig.port,
@@ -75,8 +75,8 @@ async function singletonExample() {
     console.log(`  db2 instance ID: ${(db2 as any).constructor.name}\n`);
 
     // Example 3: Get singleton instance anywhere in your app
-    console.log('3. Getting singleton instance using getSmartDB()...');
-    const db3 = getSmartDB();
+    console.log('3. Getting singleton instance using getSqlDB()...');
+    const db3 = getSqlDB();
     console.log(`✓ Same instance retrieved: ${db1 === db3}\n`);
 
     // Example 4: Use the singleton
@@ -87,7 +87,7 @@ async function singletonExample() {
 
     // Example 5: Non-singleton mode (for comparison)
     console.log('5. Creating non-singleton instance...');
-    const db4 = await createSmartDB({
+    const db4 = await createSqlDB({
         mariadb: {
             host: dbConfig.host,
             port: dbConfig.port,
@@ -117,11 +117,11 @@ async function singletonExample() {
 
     // Example 6: Clear singleton (useful for testing)
     console.log('6. Clearing singleton instance...');
-    clearSmartDBSingleton();
+    clearSqlDBSingleton();
     console.log('✓ Singleton cleared');
 
     try {
-        getSmartDB();
+        getSqlDB();
         console.log('❌ Should have thrown an error');
     } catch (error) {
         console.log(`✓ Correct error thrown: ${(error as Error).message}\n`);
@@ -135,7 +135,7 @@ async function singletonExample() {
     console.log('✓ Single database connection pool (prevents connection exhaustion)');
     console.log('✓ Shared cache across application');
     console.log('✓ Lower memory footprint');
-    console.log('✓ Easy access from anywhere with getSmartDB()');
+    console.log('✓ Easy access from anywhere with getSqlDB()');
     console.log('✓ Prevents duplicate schema discovery');
 }
 

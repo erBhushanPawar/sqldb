@@ -1,18 +1,18 @@
 import { TableOperations } from '../types/query';
-import { SmartDBClient } from '../client';
+import { SqlDBClient } from '../client';
 
 export function createTableProxy(
-  client: SmartDBClient,
+  client: SqlDBClient,
   tableName: string
 ): TableOperations<any> {
   return client.getTableOperations(tableName);
 }
 
 export class TableProxyFactory {
-  private client: SmartDBClient;
+  private client: SqlDBClient;
   private cache: Map<string, TableOperations<any>> = new Map();
 
-  constructor(client: SmartDBClient) {
+  constructor(client: SqlDBClient) {
     this.client = client;
   }
 

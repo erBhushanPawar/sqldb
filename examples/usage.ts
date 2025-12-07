@@ -1,5 +1,5 @@
 import { configDotenv } from "dotenv";
-import { createSmartDB, SmartDBClient, generateQueryId } from "../src";
+import { createSqlDB, SqlDBClient, generateQueryId } from "../src";
 import { randomUUID } from "crypto";
 import * as fs from "fs";
 import * as path from "path";
@@ -167,7 +167,7 @@ async function performanceTest() {
 }
 
 
-async function getDBClient(): Promise<SmartDBClient> {
+async function getDBClient(): Promise<SqlDBClient> {
     configDotenv();
     const dbConfigStr = process.env.DB_CONFIG;
     if (!dbConfigStr) {
@@ -176,7 +176,7 @@ async function getDBClient(): Promise<SmartDBClient> {
 
     const dbConfig = JSON.parse(dbConfigStr);
 
-    const dbClient = await createSmartDB({
+    const dbClient = await createSqlDB({
         mariadb: {
             host: dbConfig.host,
             port: dbConfig.port,
@@ -216,7 +216,7 @@ async function getDBClient(): Promise<SmartDBClient> {
 async function main() {
 
     const dbClient = await getDBClient()
-    console.log('SmartDB client initialized successfully!');
+    console.log('SqlDB client initialized successfully!');
     console.log('Discovered tables:', dbClient.getDiscoveredTables());
     const correlationId = randomUUID()
     const userTable = dbClient.getTableOperations('__raw__');
@@ -246,7 +246,7 @@ async function dbGraph() {
 
 async function testCachePerformance() {
     const dbClient = await getDBClient();
-    console.log('SmartDB client initialized successfully!\n');
+    console.log('SqlDB client initialized successfully!\n');
 
     console.log('=== Cache Performance & Invalidation Test ===\n');
     console.log('Testing multiple update cycles with performance measurements\n');
@@ -415,7 +415,7 @@ async function testCachePerformance() {
 
 async function testCacheInvalidation() {
     const dbClient = await getDBClient();
-    console.log('SmartDB client initialized successfully!\n');
+    console.log('SqlDB client initialized successfully!\n');
 
     console.log('=== Cache Invalidation Test ===\n');
 
@@ -549,7 +549,7 @@ async function testCacheInvalidation() {
 
 async function fetchWithRelationsExample() {
     const dbClient = await getDBClient();
-    console.log('SmartDB client initialized successfully!\n');
+    console.log('SqlDB client initialized successfully!\n');
 
     console.log('=== Fetch with Relations Example ===\n');
 
@@ -689,7 +689,7 @@ async function fetchWithRelationsExample() {
 
 async function warmCacheWithRelationsExample() {
     const dbClient = await getDBClient();
-    console.log('SmartDB client initialized successfully!');
+    console.log('SqlDB client initialized successfully!');
 
     // Example: Warm cache for provider table and all related tables
     const providerTable = dbClient.getTableOperations('provider');
