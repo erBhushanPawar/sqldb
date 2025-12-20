@@ -103,22 +103,103 @@ export class CacheManager {
     }
   }
 
+  /**
+   * Alias for exists() - more intuitive naming for Cache API
+   */
+  async has(key: string): Promise<boolean> {
+    return this.exists(key);
+  }
+
+  /**
+   * Get TTL for a key in seconds
+   * Returns -1 if key doesn't exist, -2 if key exists but has no TTL
+   */
+  async getTTL(key: string): Promise<number> {
+    if (!this.redis.isConnected()) {
+      return -1;
+    }
+
+    try {
+      const client = this.redis.getClient();
+      if (!client) {
+        return -1;
+      }
+      return await client.ttl(key);
+    } catch (error) {
+      console.error('[CacheManager] GetTTL error:', error);
+      return -1;
+    }
+  }
+
+  /**
+   * Invalidate all cache entries for a specific table
+   */
+  async invalidateTable(tableName: string): Promise<number> {
+    const pattern = this.keyBuilder.buildTablePattern(tableName);
+    return await this.deletePattern(pattern);
+  }
+
+  /**
+   * Invalidate cache entries matching a custom pattern
+   */
+  async invalidateByPattern(pattern: string): Promise<number> {
+    return await this.deletePattern(pattern);
+  }
+
   getKeyBuilder(): CacheKeyBuilder {
     return this.keyBuilder;
   }
 
-  getStats(): CacheStats {
+  async getStats(): Promise<CacheStats> {
     const total = this.stats.hits + this.stats.misses;
     const hitRate = total > 0
       ? ((this.stats.hits / total) * 100).toFixed(2)
       : '0.00';
 
+    // Get total keys and memory usage from Redis
+    let totalKeys = 0;
+    let memoryUsage = 0;
+    let keysByTable: Record<string, number> = {};
+
+    try {
+      if (this.redis.isConnected()) {
+        const client = this.redis.getClient();
+        if (client) {
+          // Get total keys matching our prefix
+          const allKeys = await this.redis.scan('*');
+          totalKeys = allKeys.length;
+
+          // Get memory usage (in bytes)
+          const info = await client.info('memory');
+          const memMatch = info.match(/used_memory:(\d+)/);
+          if (memMatch) {
+            memoryUsage = parseInt(memMatch[1], 10);
+          }
+
+          // Count keys by table
+          for (const key of allKeys) {
+            // Parse table name from key pattern: prefix:table:operation:hash
+            const parts = key.split(':');
+            if (parts.length >= 2) {
+              const tableName = parts[1];
+              keysByTable[tableName] = (keysByTable[tableName] || 0) + 1;
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error('[CacheManager] GetStats error:', error);
+    }
+
     return {
       hits: this.stats.hits,
       misses: this.stats.misses,
       evictions: this.stats.evictions,
-      size: 0, // Redis doesn't provide easy size lookup
+      size: 0, // Deprecated, use totalKeys instead
       hitRate: `${hitRate}%`,
+      totalKeys,
+      memoryUsage,
+      keysByTable,
     };
   }
 

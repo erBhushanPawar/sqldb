@@ -4,6 +4,8 @@ import { InvalidationManager } from '../cache/invalidation';
 import { QueryBuilder } from './query-builder';
 import { TableOperations, WhereClause, FindOptions, RelationConfig } from '../types/query';
 import { CacheConfig } from '../types/config';
+import { QueryStatsTracker } from '../warming/query-stats-tracker';
+import { generateQueryId } from './query-tracker';
 
 export class TableOperationsImpl<T = any> implements TableOperations<T> {
   private tableName: string;
@@ -12,6 +14,7 @@ export class TableOperationsImpl<T = any> implements TableOperations<T> {
   private invalidationManager: InvalidationManager;
   private queryBuilder: QueryBuilder;
   private cacheConfig: Required<CacheConfig>;
+  private statsTracker?: QueryStatsTracker;
 
   constructor(
     tableName: string,
@@ -19,7 +22,8 @@ export class TableOperationsImpl<T = any> implements TableOperations<T> {
     cacheManager: CacheManager,
     invalidationManager: InvalidationManager,
     queryBuilder: QueryBuilder,
-    cacheConfig: Required<CacheConfig>
+    cacheConfig: Required<CacheConfig>,
+    statsTracker?: QueryStatsTracker
   ) {
     this.tableName = tableName;
     this.dbManager = dbManager;
@@ -27,6 +31,7 @@ export class TableOperationsImpl<T = any> implements TableOperations<T> {
     this.invalidationManager = invalidationManager;
     this.queryBuilder = queryBuilder;
     this.cacheConfig = cacheConfig;
+    this.statsTracker = statsTracker;
   }
 
   async findOne(where: WhereClause<T>, options?: FindOptions): Promise<T | null> {
@@ -39,6 +44,8 @@ export class TableOperationsImpl<T = any> implements TableOperations<T> {
     const skipCache = options?.skipCache || false;
     const correlationId = options?.correlationId;
     const withRelations = options?.withRelations;
+    const startTime = Date.now();
+    let results: T[];
 
     // Build cache key (exclude correlationId, skipCache, and withRelations from key as they don't affect the base query result)
     const { correlationId: _, skipCache: __, withRelations: ___, ...cacheableOptions } = options || {};
@@ -50,11 +57,30 @@ export class TableOperationsImpl<T = any> implements TableOperations<T> {
     if (!skipCache && this.cacheManager.isEnabled()) {
       const cached = await this.cacheManager.get<T[]>(cacheKey);
       if (cached !== null) {
+        results = cached;
+
+        // Record cache hit for stats
+        if (this.statsTracker) {
+          const executionTime = Date.now() - startTime;
+          const queryId = generateQueryId();
+          this.statsTracker.recordAccess({
+            queryId,
+            tableName: this.tableName,
+            queryType: 'findMany',
+            filters: JSON.stringify(where || {}),
+            executionTimeMs: executionTime,
+            cacheHit: true,
+            timestamp: new Date(),
+          }).catch(() => {
+            // Ignore stats tracking errors
+          });
+        }
+
         // If withRelations is requested, fetch and attach related data
         if (withRelations) {
-          return await this.attachRelations(cached, withRelations, correlationId);
+          return await this.attachRelations(results, withRelations, correlationId);
         }
-        return cached;
+        return results;
       }
     }
 
@@ -65,7 +91,24 @@ export class TableOperationsImpl<T = any> implements TableOperations<T> {
       options
     );
 
-    const results = await this.dbManager.query<T[]>(sql, params, correlationId);
+    results = await this.dbManager.query<T[]>(sql, params, correlationId);
+    const executionTime = Date.now() - startTime;
+
+    // Record query stats for auto-warming
+    if (this.statsTracker) {
+      const queryId = generateQueryId();
+      this.statsTracker.recordAccess({
+        queryId,
+        tableName: this.tableName,
+        queryType: 'findMany',
+        filters: JSON.stringify(where || {}),
+        executionTimeMs: executionTime,
+        cacheHit: false,
+        timestamp: new Date(),
+      }).catch(() => {
+        // Ignore stats tracking errors
+      });
+    }
 
     // Cache results
     if (!skipCache && this.cacheManager.isEnabled()) {
@@ -81,6 +124,7 @@ export class TableOperationsImpl<T = any> implements TableOperations<T> {
   }
 
   async findById(id: string | number, correlationId?: string): Promise<T | null> {
+    const startTime = Date.now();
     const cacheKey = this.cacheManager
       .getKeyBuilder()
       .buildIdKey(this.tableName, id);
@@ -89,6 +133,22 @@ export class TableOperationsImpl<T = any> implements TableOperations<T> {
     if (this.cacheManager.isEnabled()) {
       const cached = await this.cacheManager.get<T>(cacheKey);
       if (cached !== null) {
+        // Record cache hit for stats
+        if (this.statsTracker) {
+          const executionTime = Date.now() - startTime;
+          const queryId = generateQueryId();
+          this.statsTracker.recordAccess({
+            queryId,
+            tableName: this.tableName,
+            queryType: 'findById',
+            filters: JSON.stringify({ id }),
+            executionTimeMs: executionTime,
+            cacheHit: true,
+            timestamp: new Date(),
+          }).catch(() => {
+            // Ignore stats tracking errors
+          });
+        }
         return cached;
       }
     }
@@ -96,8 +156,25 @@ export class TableOperationsImpl<T = any> implements TableOperations<T> {
     // Query database
     const { sql, params } = this.queryBuilder.buildSelectById(this.tableName, id);
     const results = await this.dbManager.query<T[]>(sql, params, correlationId);
+    const executionTime = Date.now() - startTime;
 
     const result = results.length > 0 ? results[0] : null;
+
+    // Record query stats for auto-warming
+    if (this.statsTracker) {
+      const queryId = generateQueryId();
+      this.statsTracker.recordAccess({
+        queryId,
+        tableName: this.tableName,
+        queryType: 'findById',
+        filters: JSON.stringify({ id }),
+        executionTimeMs: executionTime,
+        cacheHit: false,
+        timestamp: new Date(),
+      }).catch(() => {
+        // Ignore stats tracking errors
+      });
+    }
 
     // Cache result
     if (result && this.cacheManager.isEnabled()) {
@@ -108,6 +185,7 @@ export class TableOperationsImpl<T = any> implements TableOperations<T> {
   }
 
   async count(where?: WhereClause<T>, correlationId?: string): Promise<number> {
+    const startTime = Date.now();
     const cacheKey = this.cacheManager
       .getKeyBuilder()
       .buildKey(this.tableName, 'count', { where });
@@ -116,6 +194,22 @@ export class TableOperationsImpl<T = any> implements TableOperations<T> {
     if (this.cacheManager.isEnabled()) {
       const cached = await this.cacheManager.get<number>(cacheKey);
       if (cached !== null) {
+        // Record cache hit for stats
+        if (this.statsTracker) {
+          const executionTime = Date.now() - startTime;
+          const queryId = generateQueryId();
+          this.statsTracker.recordAccess({
+            queryId,
+            tableName: this.tableName,
+            queryType: 'count',
+            filters: JSON.stringify(where || {}),
+            executionTimeMs: executionTime,
+            cacheHit: true,
+            timestamp: new Date(),
+          }).catch(() => {
+            // Ignore stats tracking errors
+          });
+        }
         return cached;
       }
     }
@@ -123,8 +217,25 @@ export class TableOperationsImpl<T = any> implements TableOperations<T> {
     // Query database
     const { sql, params } = this.queryBuilder.buildCount(this.tableName, where);
     const results = await this.dbManager.query<any[]>(sql, params, correlationId);
+    const executionTime = Date.now() - startTime;
 
     const count = results[0]?.count || 0;
+
+    // Record query stats for auto-warming
+    if (this.statsTracker) {
+      const queryId = generateQueryId();
+      this.statsTracker.recordAccess({
+        queryId,
+        tableName: this.tableName,
+        queryType: 'count',
+        filters: JSON.stringify(where || {}),
+        executionTimeMs: executionTime,
+        cacheHit: false,
+        timestamp: new Date(),
+      }).catch(() => {
+        // Ignore stats tracking errors
+      });
+    }
 
     // Cache with shorter TTL (counts change frequently)
     if (this.cacheManager.isEnabled()) {
@@ -302,6 +413,7 @@ export class TableOperationsImpl<T = any> implements TableOperations<T> {
   }
 
   async raw<R = any>(sql: string, params?: any[], correlationId?: string): Promise<R> {
+    const startTime = Date.now();
     const cacheKey = this.cacheManager
       .getKeyBuilder()
       .buildKey(this.tableName, 'raw', { sql, params });
@@ -310,12 +422,45 @@ export class TableOperationsImpl<T = any> implements TableOperations<T> {
     if (this.cacheManager.isEnabled()) {
       const cached = await this.cacheManager.get<R>(cacheKey);
       if (cached !== null) {
+        // Record cache hit for stats (for SELECT queries)
+        if (this.statsTracker && sql.trim().toUpperCase().startsWith('SELECT')) {
+          const executionTime = Date.now() - startTime;
+          const queryId = generateQueryId();
+          this.statsTracker.recordAccess({
+            queryId,
+            tableName: this.tableName,
+            queryType: 'raw',
+            filters: JSON.stringify({ sql: sql.substring(0, 100), params }),
+            executionTimeMs: executionTime,
+            cacheHit: true,
+            timestamp: new Date(),
+          }).catch(() => {
+            // Ignore stats tracking errors
+          });
+        }
         return cached;
       }
     }
 
     // Query database
     const result = await this.dbManager.query<R>(sql, params, correlationId);
+    const executionTime = Date.now() - startTime;
+
+    // Record query stats for auto-warming (for SELECT queries)
+    if (this.statsTracker && sql.trim().toUpperCase().startsWith('SELECT')) {
+      const queryId = generateQueryId();
+      this.statsTracker.recordAccess({
+        queryId,
+        tableName: this.tableName,
+        queryType: 'raw',
+        filters: JSON.stringify({ sql: sql.substring(0, 100), params }),
+        executionTimeMs: executionTime,
+        cacheHit: false,
+        timestamp: new Date(),
+      }).catch(() => {
+        // Ignore stats tracking errors
+      });
+    }
 
     // Cache with 1-minute TTL
     if (this.cacheManager.isEnabled()) {

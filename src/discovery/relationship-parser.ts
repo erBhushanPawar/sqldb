@@ -27,8 +27,13 @@ export class RelationshipParser {
         kcu.TABLE_NAME as fromTable,
         kcu.COLUMN_NAME as fromColumn,
         kcu.REFERENCED_TABLE_NAME as toTable,
-        kcu.REFERENCED_COLUMN_NAME as toColumn
+        kcu.REFERENCED_COLUMN_NAME as toColumn,
+        rc.DELETE_RULE as onDelete,
+        rc.UPDATE_RULE as onUpdate
       FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu
+      JOIN INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS rc
+        ON kcu.CONSTRAINT_NAME = rc.CONSTRAINT_NAME
+        AND kcu.CONSTRAINT_SCHEMA = rc.CONSTRAINT_SCHEMA
       WHERE kcu.TABLE_SCHEMA = ?
       AND kcu.REFERENCED_TABLE_NAME IS NOT NULL
       ORDER BY kcu.TABLE_NAME, kcu.CONSTRAINT_NAME
@@ -42,6 +47,8 @@ export class RelationshipParser {
       fromColumn: row.fromColumn,
       toTable: row.toTable,
       toColumn: row.toColumn,
+      onDelete: row.onDelete,
+      onUpdate: row.onUpdate,
     }));
   }
 }

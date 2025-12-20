@@ -42,6 +42,12 @@ export interface LoggingConfig {
   logger?: (level: string, message: string, meta?: any) => void;
 }
 
+export interface CaseConversionConfig {
+  enabled?: boolean;
+  database?: 'snake_case' | 'camelCase'; // Database column naming
+  application?: 'snake_case' | 'camelCase'; // Application property naming
+}
+
 export interface SqlDBConfig {
   mariadb: MariaDBConfig;
   redis: RedisConfig;
@@ -49,6 +55,7 @@ export interface SqlDBConfig {
   discovery?: DiscoveryConfig;
   logging?: LoggingConfig;
   warming?: WarmingConfig;
+  caseConversion?: CaseConversionConfig;
 }
 
 // Default configurations
@@ -89,4 +96,10 @@ export const DEFAULT_WARMING_CONFIG: Required<WarmingConfig> = {
   statsTableName: '__sqldb_query_stats',
   onWarmingComplete: undefined as any,
   onWarmingError: undefined as any,
+};
+
+export const DEFAULT_CASE_CONVERSION_CONFIG: Required<CaseConversionConfig> = {
+  enabled: false,
+  database: 'snake_case',
+  application: 'camelCase',
 };

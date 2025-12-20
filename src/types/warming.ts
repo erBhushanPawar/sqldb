@@ -1,7 +1,7 @@
 export interface QueryStats {
   queryId: string;
   tableName: string;
-  queryType: 'findMany' | 'findOne' | 'findById' | 'count';
+  queryType: 'findMany' | 'findOne' | 'findById' | 'count' | 'raw';
   filters: string; // JSON stringified filters
   accessCount: number;
   lastAccessedAt: Date;

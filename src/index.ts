@@ -92,8 +92,11 @@ export { InvalidationManager } from './cache/invalidation';
 export { DependencyGraph } from './discovery/dependency-graph';
 export { HooksManager } from './hooks/hooks-manager';
 export { QueryBuilder } from './query/query-builder';
-export { InMemoryQueryTracker, generateQueryId } from './query/query-tracker';
+export { InMemoryQueryTracker, generateQueryId, QueryMetrics } from './query/query-tracker';
 export { SchemaGenerator } from './cli/schema-generator';
+
+// Export utilities
+export { CaseConverter } from './utils/case-converter';
 
 // Default export
 export default {

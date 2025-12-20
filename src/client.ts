@@ -22,6 +22,7 @@ import { InMemoryQueryTracker } from './query/query-tracker';
 import { QueryStatsTracker } from './warming/query-stats-tracker';
 import { AutoWarmingManager } from './warming/auto-warming-manager';
 import { WarmingStats } from './types/warming';
+import { CacheAPI } from './types/cache';
 
 export class SqlDBClient {
   private config: SqlDBConfig;
@@ -34,6 +35,7 @@ export class SqlDBClient {
   private tableProxyFactory!: TableProxyFactory;
   public hooks!: HooksManager;
   public queryTracker: InMemoryQueryTracker;
+  public cache!: CacheAPI;
 
   // Auto-warming components
   private statsTracker?: QueryStatsTracker;
@@ -89,6 +91,21 @@ export class SqlDBClient {
 
     this.hooks = new HooksManager();
     this.tableProxyFactory = new TableProxyFactory(this);
+
+    // Expose Cache API
+    this.cache = {
+      invalidateTable: this.cacheManager.invalidateTable.bind(this.cacheManager),
+      invalidateByPattern: this.cacheManager.invalidateByPattern.bind(this.cacheManager),
+      clear: this.cacheManager.clear.bind(this.cacheManager),
+      getStats: this.cacheManager.getStats.bind(this.cacheManager),
+      has: this.cacheManager.has.bind(this.cacheManager),
+      getTTL: this.cacheManager.getTTL.bind(this.cacheManager),
+      get: this.cacheManager.get.bind(this.cacheManager),
+      set: this.cacheManager.set.bind(this.cacheManager),
+      delete: this.cacheManager.delete.bind(this.cacheManager),
+      resetStats: this.cacheManager.resetStats.bind(this.cacheManager),
+      isEnabled: this.cacheManager.isEnabled.bind(this.cacheManager),
+    };
 
     // Run schema discovery
     if (this.config.discovery!.autoDiscover) {
@@ -180,7 +197,8 @@ export class SqlDBClient {
       this.cacheManager,
       this.invalidationManager,
       this.queryBuilder,
-      this.config.cache as Required<typeof DEFAULT_CACHE_CONFIG>
+      this.config.cache as Required<typeof DEFAULT_CACHE_CONFIG>,
+      this.statsTracker
     );
   }
 
@@ -204,12 +222,30 @@ export class SqlDBClient {
     return this.tableSchemas.get(tableName);
   }
 
+  getAllSchemas(): TableSchema[] {
+    return Array.from(this.tableSchemas.values());
+  }
+
   getQueries(correlationId?: string): QueryMetadata[] {
     return this.queryTracker.getQueries(correlationId);
   }
 
   clearQueries(correlationId?: string): void {
     this.queryTracker.clearQueries(correlationId);
+  }
+
+  /**
+   * Get query performance metrics
+   */
+  getMetrics(): any {
+    return this.queryTracker.getMetrics();
+  }
+
+  /**
+   * Reset query metrics
+   */
+  resetMetrics(): void {
+    this.queryTracker.reset();
   }
 
   async healthCheck(): Promise<{
@@ -225,6 +261,49 @@ export class SqlDBClient {
       redis: redisHealthy,
       overall: mariadbHealthy && redisHealthy,
     };
+  }
+
+  /**
+   * Get detailed connection information
+   */
+  getConnectionInfo(): {
+    mariadb: {
+      host: string;
+      database: string;
+      activeConnections: number;
+      totalConnections: number;
+      idleConnections: number;
+      maxConnections: number;
+      isConnected: boolean;
+    };
+    redis: {
+      host: string;
+      port: number;
+      db: number;
+      isConnected: boolean;
+    };
+  } {
+    const mariadbInfo = this.dbManager.getConnectionInfo();
+
+    return {
+      mariadb: {
+        ...mariadbInfo,
+        isConnected: this.dbManager.isConnected(),
+      },
+      redis: {
+        host: this.config.redis.host,
+        port: this.config.redis.port || 6379,
+        db: this.config.redis.db || 0,
+        isConnected: this.redisManager.isConnected(),
+      },
+    };
+  }
+
+  /**
+   * Check if the client is connected to both MariaDB and Redis
+   */
+  isConnected(): boolean {
+    return this.dbManager.isConnected() && this.redisManager.isConnected();
   }
 
   /**

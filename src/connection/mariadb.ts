@@ -5,6 +5,40 @@ import { generateQueryId } from '../query/query-tracker';
 
 type QueryType = 'SELECT' | 'INSERT' | 'UPDATE' | 'DELETE' | 'CREATE' | 'ALTER' | 'DROP' | 'OTHER';
 
+/**
+ * Recursively converts BigInt values to Numbers in the result set
+ * This prevents "Cannot convert a BigInt value to a number" errors
+ * when downstream code tries to use isNaN() or other number operations
+ */
+function convertBigIntToNumber(value: any): any {
+  if (value === null || value === undefined) {
+    return value;
+  }
+
+  if (typeof value === 'bigint') {
+    // Convert BigInt to Number
+    // For very large BigInts that exceed Number.MAX_SAFE_INTEGER,
+    // precision may be lost, but this is acceptable for most use cases
+    return Number(value);
+  }
+
+  if (Array.isArray(value)) {
+    return value.map(convertBigIntToNumber);
+  }
+
+  if (typeof value === 'object' && value.constructor === Object) {
+    const converted: any = {};
+    for (const key in value) {
+      if (value.hasOwnProperty(key)) {
+        converted[key] = convertBigIntToNumber(value[key]);
+      }
+    }
+    return converted;
+  }
+
+  return value;
+}
+
 export class MariaDBConnectionManager {
   private pool: mariadb.Pool | null = null;
   private config: MariaDBConfig;
@@ -174,6 +208,8 @@ export class MariaDBConnectionManager {
       sql,
       params,
       startTime,
+      tableName: tableName || undefined,
+      operation: queryType,
     };
 
     try {
@@ -198,7 +234,8 @@ export class MariaDBConnectionManager {
         metadata.resultCount
       );
 
-      return result;
+      // Convert BigInt values to Numbers to prevent downstream errors
+      return convertBigIntToNumber(result) as T;
     } catch (error) {
       const endTime = Date.now();
       const executionTimeMs = endTime - startTime;
@@ -233,6 +270,39 @@ export class MariaDBConnectionManager {
     } catch (error) {
       return false;
     }
+  }
+
+  /**
+   * Get connection pool information
+   */
+  getConnectionInfo(): {
+    host: string;
+    database: string;
+    activeConnections: number;
+    totalConnections: number;
+    idleConnections: number;
+    maxConnections: number;
+  } {
+    const pool = this.getPool();
+
+    return {
+      host: this.config.host,
+      database: this.config.database,
+      activeConnections: pool.activeConnections(),
+      totalConnections: pool.totalConnections(),
+      idleConnections: pool.idleConnections(),
+      maxConnections: this.config.connectionLimit || 10,
+    };
+  }
+
+  /**
+   * Get pool instance
+   */
+  getPool(): mariadb.Pool {
+    if (!this.pool) {
+      throw new Error('Database not connected. Call connect() first.');
+    }
+    return this.pool;
   }
 
   async close(): Promise<void> {

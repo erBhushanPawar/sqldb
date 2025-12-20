@@ -13,10 +13,46 @@ export interface ColumnInfo {
   collationName?: string | null;
 }
 
+/**
+ * Extended column definition with additional metadata
+ */
+export interface ColumnDefinition extends ColumnInfo {
+  name: string; // Alias for columnName
+  type: string; // Alias for dataType
+  nullable: boolean; // Alias for isNullable
+  defaultValue: any; // Parsed columnDefault
+  isPrimaryKey: boolean;
+  isAutoIncrement: boolean;
+  maxLength?: number; // Alias for characterMaximumLength
+}
+
+/**
+ * Index definition
+ */
+export interface IndexDefinition {
+  name: string;
+  columns: string[];
+  isUnique: boolean;
+  isPrimary: boolean;
+}
+
+/**
+ * Foreign key definition
+ */
+export interface ForeignKeyDefinition {
+  columnName: string;
+  referencedTable: string;
+  referencedColumn: string;
+  onDelete: 'CASCADE' | 'SET NULL' | 'RESTRICT' | 'NO ACTION';
+  onUpdate: 'CASCADE' | 'SET NULL' | 'RESTRICT' | 'NO ACTION';
+}
+
 export interface TableSchema {
   tableName: string;
   columns: ColumnInfo[];
   primaryKey?: string;
+  indexes?: IndexDefinition[];
+  foreignKeys?: ForeignKeyDefinition[];
 }
 
 export interface TableRelationship {
@@ -25,6 +61,8 @@ export interface TableRelationship {
   fromColumn: string;
   toTable: string;
   toColumn: string;
+  onDelete?: string;
+  onUpdate?: string;
 }
 
 export interface SchemaDiscoveryResult {

@@ -212,6 +212,12 @@ export class AutoWarmingManager {
         sql = this.buildCountSQL(queryStats.tableName, filters, params);
         break;
 
+      case 'raw':
+        // For raw queries, use the stored SQL directly
+        sql = filters.sql || '';
+        params.push(...(filters.params || []));
+        break;
+
       default:
         throw new Error(`Unknown query type: ${queryStats.queryType}`);
     }
