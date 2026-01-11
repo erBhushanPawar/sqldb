@@ -4,6 +4,7 @@ import {
   DEFAULT_DISCOVERY_CONFIG,
   DEFAULT_LOGGING_CONFIG,
   DEFAULT_WARMING_CONFIG,
+  DEFAULT_SEARCH_CONFIG,
 } from './types/config';
 import { TableOperations, QueryMetadata } from './types/query';
 import { TableSchema } from './types/schema';
@@ -23,6 +24,9 @@ import { QueryStatsTracker } from './warming/query-stats-tracker';
 import { AutoWarmingManager } from './warming/auto-warming-manager';
 import { WarmingStats } from './types/warming';
 import { CacheAPI } from './types/cache';
+import { InvertedIndexManager } from './search/inverted-index-manager';
+import { SearchRanker } from './search/search-ranker';
+import { IndexStats } from './types/search';
 
 export class SqlDBClient {
   private config: SqlDBConfig;
@@ -41,6 +45,10 @@ export class SqlDBClient {
   private statsTracker?: QueryStatsTracker;
   private warmingManager?: AutoWarmingManager;
 
+  // Search components
+  private indexManager?: InvertedIndexManager;
+  private searchRanker?: SearchRanker;
+
   private initialized: boolean = false;
   private discoveredTables: Set<string> = new Set();
   private tableSchemas: Map<string, TableSchema> = new Map();
@@ -52,6 +60,7 @@ export class SqlDBClient {
       discovery: { ...DEFAULT_DISCOVERY_CONFIG, ...config.discovery },
       logging: { ...DEFAULT_LOGGING_CONFIG, ...config.logging },
       warming: { ...DEFAULT_WARMING_CONFIG, ...config.warming },
+      search: { ...DEFAULT_SEARCH_CONFIG, ...config.search },
     };
     this.queryTracker = new InMemoryQueryTracker();
   }
@@ -139,6 +148,17 @@ export class SqlDBClient {
       this.log('info', 'Auto-warming enabled');
     }
 
+    // Initialize search system if enabled
+    if (this.config.search!.enabled && this.config.search!.invertedIndex?.enabled) {
+      this.indexManager = new InvertedIndexManager(
+        this.redisManager,
+        this.config.search!.invertedIndex!,
+        this.config.redis.keyPrefix
+      );
+      this.searchRanker = new SearchRanker();
+      this.log('info', 'Search system enabled');
+    }
+
     this.initialized = true;
     this.log('info', 'SqlDBClient initialized successfully');
   }
@@ -198,7 +218,9 @@ export class SqlDBClient {
       this.invalidationManager,
       this.queryBuilder,
       this.config.cache as Required<typeof DEFAULT_CACHE_CONFIG>,
-      this.statsTracker
+      this.statsTracker,
+      this.indexManager,
+      this.searchRanker
     );
   }
 
@@ -372,6 +394,79 @@ export class SqlDBClient {
       return null;
     }
     return await this.statsTracker.getStatsSummary();
+  }
+
+  /**
+   * Build search index for a specific table
+   */
+  async buildSearchIndex(tableName: string): Promise<IndexStats> {
+    if (!this.indexManager) {
+      throw new Error('Search is not enabled. Set search.enabled = true in config.');
+    }
+
+    const tableOps = this.getTableOperations(tableName);
+    if (!tableOps.buildSearchIndex) {
+      throw new Error(`Table "${tableName}" does not have search configured.`);
+    }
+
+    return await tableOps.buildSearchIndex();
+  }
+
+  /**
+   * Rebuild search index for a specific table
+   */
+  async rebuildSearchIndex(tableName: string): Promise<IndexStats> {
+    if (!this.indexManager) {
+      throw new Error('Search is not enabled. Set search.enabled = true in config.');
+    }
+
+    const tableOps = this.getTableOperations(tableName);
+    if (!tableOps.rebuildSearchIndex) {
+      throw new Error(`Table "${tableName}" does not have search configured.`);
+    }
+
+    return await tableOps.rebuildSearchIndex();
+  }
+
+  /**
+   * Get search statistics for a specific table
+   */
+  async getSearchStats(tableName: string): Promise<IndexStats | null> {
+    if (!this.indexManager) {
+      return null;
+    }
+
+    const tableOps = this.getTableOperations(tableName);
+    if (!tableOps.getSearchStats) {
+      return null;
+    }
+
+    return await tableOps.getSearchStats();
+  }
+
+  /**
+   * Build search indexes for all configured tables
+   */
+  async buildAllSearchIndexes(): Promise<Map<string, IndexStats>> {
+    if (!this.indexManager) {
+      throw new Error('Search is not enabled. Set search.enabled = true in config.');
+    }
+
+    const results = new Map<string, IndexStats>();
+    const searchConfig = this.config.search!.invertedIndex!;
+
+    for (const tableName of Object.keys(searchConfig.tables)) {
+      try {
+        this.log('info', `Building search index for table: ${tableName}`);
+        const stats = await this.buildSearchIndex(tableName);
+        results.set(tableName, stats);
+        this.log('info', `Search index built for ${tableName}`, stats);
+      } catch (error) {
+        this.log('error', `Failed to build search index for ${tableName}`, error);
+      }
+    }
+
+    return results;
   }
 
   private log(level: string, message: string, meta?: any): void {

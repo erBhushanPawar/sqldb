@@ -62,6 +62,12 @@ export interface TableOperations<T = any> {
       warmDependencies?: boolean;
     }
   ): Promise<void>;
+
+  // Search operations (inverted index)
+  search?(query: string, options?: import('../types/search').SearchOptions): Promise<import('../types/search').SearchResult<T>[]>;
+  buildSearchIndex?(): Promise<import('../types/search').IndexStats>;
+  rebuildSearchIndex?(): Promise<import('../types/search').IndexStats>;
+  getSearchStats?(): Promise<import('../types/search').IndexStats | null>;
 }
 
 export interface QueryResult {

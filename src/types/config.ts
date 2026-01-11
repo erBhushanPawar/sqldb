@@ -1,6 +1,7 @@
 import * as mariadb from 'mariadb';
 import { RedisOptions } from 'ioredis';
 import { WarmingConfig } from './warming';
+import { SearchConfig } from './search';
 
 export interface MariaDBConfig {
   host: string;
@@ -56,6 +57,7 @@ export interface SqlDBConfig {
   logging?: LoggingConfig;
   warming?: WarmingConfig;
   caseConversion?: CaseConversionConfig;
+  search?: SearchConfig;
 }
 
 // Default configurations
@@ -102,4 +104,12 @@ export const DEFAULT_CASE_CONVERSION_CONFIG: Required<CaseConversionConfig> = {
   enabled: false,
   database: 'snake_case',
   application: 'camelCase',
+};
+
+export const DEFAULT_SEARCH_CONFIG: SearchConfig = {
+  enabled: false,
+  invertedIndex: {
+    enabled: false,
+    tables: {},
+  },
 };

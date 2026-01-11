@@ -6,6 +6,9 @@ import { TableOperations, WhereClause, FindOptions, RelationConfig } from '../ty
 import { CacheConfig } from '../types/config';
 import { QueryStatsTracker } from '../warming/query-stats-tracker';
 import { generateQueryId } from './query-tracker';
+import { SearchOptions, SearchResult, IndexStats } from '../types/search';
+import { InvertedIndexManager } from '../search/inverted-index-manager';
+import { SearchRanker } from '../search/search-ranker';
 
 export class TableOperationsImpl<T = any> implements TableOperations<T> {
   private tableName: string;
@@ -15,6 +18,8 @@ export class TableOperationsImpl<T = any> implements TableOperations<T> {
   private queryBuilder: QueryBuilder;
   private cacheConfig: Required<CacheConfig>;
   private statsTracker?: QueryStatsTracker;
+  private indexManager?: InvertedIndexManager;
+  private searchRanker?: SearchRanker;
 
   constructor(
     tableName: string,
@@ -23,7 +28,9 @@ export class TableOperationsImpl<T = any> implements TableOperations<T> {
     invalidationManager: InvalidationManager,
     queryBuilder: QueryBuilder,
     cacheConfig: Required<CacheConfig>,
-    statsTracker?: QueryStatsTracker
+    statsTracker?: QueryStatsTracker,
+    indexManager?: InvertedIndexManager,
+    searchRanker?: SearchRanker
   ) {
     this.tableName = tableName;
     this.dbManager = dbManager;
@@ -32,6 +39,8 @@ export class TableOperationsImpl<T = any> implements TableOperations<T> {
     this.queryBuilder = queryBuilder;
     this.cacheConfig = cacheConfig;
     this.statsTracker = statsTracker;
+    this.indexManager = indexManager;
+    this.searchRanker = searchRanker;
   }
 
   async findOne(where: WhereClause<T>, options?: FindOptions): Promise<T | null> {
@@ -714,5 +723,226 @@ export class TableOperationsImpl<T = any> implements TableOperations<T> {
         }
       }
     }
+  }
+
+  /**
+   * Full-text search using inverted index
+   * Returns ranked results with optional highlighting
+   */
+  async search(query: string, options?: SearchOptions): Promise<SearchResult<T>[]> {
+    if (!this.indexManager || !this.searchRanker) {
+      throw new Error(
+        `Search is not enabled for table "${this.tableName}". ` +
+        'Configure search in SqlDBConfig and initialize the client.'
+      );
+    }
+
+    const startTime = Date.now();
+    const {
+      fields,
+      limit = 10,
+      offset = 0,
+      filters,
+      ranking,
+      highlightFields,
+      minScore = 0,
+    } = options || {};
+
+    // Step 1: Search inverted index to get document IDs
+    const docIds = await this.indexManager.search(this.tableName, query, limit + offset);
+
+    if (docIds.length === 0) {
+      return [];
+    }
+
+    // Step 2: Fetch full records from database
+    const idsToFetch = docIds.slice(offset, offset + limit);
+
+    if (idsToFetch.length === 0) {
+      return [];
+    }
+
+    // Detect the ID field name (id, service_id, etc.)
+    const idField = this.detectIdField();
+
+    // Build SQL IN clause manually since query builder doesn't support $in
+    const placeholders = idsToFetch.map(() => '?').join(',');
+    const whereFilters = filters ? Object.entries(filters).map(([key, val]) => `${key} = ?`).join(' AND ') : '';
+    const sql = whereFilters
+      ? `SELECT * FROM ${this.tableName} WHERE ${idField} IN (${placeholders}) AND ${whereFilters} LIMIT ?`
+      : `SELECT * FROM ${this.tableName} WHERE ${idField} IN (${placeholders}) LIMIT ?`;
+
+    const params = filters
+      ? [...idsToFetch, ...Object.values(filters), limit]
+      : [...idsToFetch, limit];
+
+    const records = await this.raw<T[]>(sql, params);
+
+    // Create a map for quick lookup (ID as string to support UUIDs)
+    const recordsMap = new Map<string, T>();
+    for (const record of records) {
+      const id = (record as any)[idField];
+      if (id !== undefined && id !== null) {
+        recordsMap.set(String(id), record);
+      }
+    }
+
+    // Step 3: Build results array in the correct order with scores
+    const results: SearchResult<T>[] = [];
+
+    for (const docId of idsToFetch) {
+      const record = recordsMap.get(docId);
+      if (!record) continue;
+
+      // Calculate relevance score (simplified for now)
+      const score = this.calculateSimpleScore(query, record, fields);
+
+      if (score < minScore) {
+        continue;
+      }
+
+      const result: SearchResult<T> = {
+        score,
+        data: record,
+      };
+
+      // Add highlights if requested
+      if (highlightFields && highlightFields.length > 0) {
+        result.highlights = {};
+        const queryTerms = query.toLowerCase().split(/\s+/);
+
+        for (const field of highlightFields) {
+          const fieldValue = (record as any)[field];
+          if (fieldValue && typeof fieldValue === 'string') {
+            result.highlights[field] = this.searchRanker.highlightText(
+              fieldValue,
+              queryTerms
+            );
+          }
+        }
+      }
+
+      // Add matched terms
+      result.matchedTerms = query.toLowerCase().split(/\s+/);
+
+      results.push(result);
+    }
+
+    const executionTime = Date.now() - startTime;
+
+    // Record stats if enabled
+    if (this.statsTracker) {
+      const queryId = generateQueryId();
+      this.statsTracker.recordAccess({
+        queryId,
+        tableName: this.tableName,
+        queryType: 'search',
+        filters: JSON.stringify({ query, options }),
+        executionTimeMs: executionTime,
+        cacheHit: false,
+        timestamp: new Date(),
+      }).catch(() => {
+        // Ignore stats tracking errors
+      });
+    }
+
+    return results;
+  }
+
+  /**
+   * Build search index for this table from scratch
+   */
+  async buildSearchIndex(): Promise<IndexStats> {
+    if (!this.indexManager) {
+      throw new Error(
+        `Search is not enabled for table "${this.tableName}". ` +
+        'Configure search in SqlDBConfig and initialize the client.'
+      );
+    }
+
+    // Fetch all records from the table
+    const records = await this.findMany({}, { skipCache: true });
+
+    // Build the index
+    const stats = await this.indexManager.buildIndex(this.tableName, records as any[]);
+
+    return stats;
+  }
+
+  /**
+   * Rebuild search index (clear and rebuild)
+   */
+  async rebuildSearchIndex(): Promise<IndexStats> {
+    if (!this.indexManager) {
+      throw new Error(
+        `Search is not enabled for table "${this.tableName}". ` +
+        'Configure search in SqlDBConfig and initialize the client.'
+      );
+    }
+
+    // Clear existing index
+    await this.indexManager.clearIndex(this.tableName);
+
+    // Rebuild from scratch
+    return await this.buildSearchIndex();
+  }
+
+  /**
+   * Get search index statistics
+   */
+  async getSearchStats(): Promise<IndexStats | null> {
+    if (!this.indexManager) {
+      return null;
+    }
+
+    return await this.indexManager.getStats(this.tableName);
+  }
+
+  /**
+   * Calculate a simple relevance score for a document
+   * This is a fallback when full TF-IDF scoring isn't available
+   */
+  private calculateSimpleScore(query: string, record: T, fields?: string[]): number {
+    const queryTerms = query.toLowerCase().split(/\s+/);
+    const searchFields = fields || Object.keys(record as any);
+
+    let score = 0;
+    let maxScore = 0;
+
+    for (const field of searchFields) {
+      const fieldValue = (record as any)[field];
+      if (!fieldValue || typeof fieldValue !== 'string') {
+        continue;
+      }
+
+      const lowerValue = fieldValue.toLowerCase();
+      maxScore += queryTerms.length;
+
+      for (const term of queryTerms) {
+        if (lowerValue.includes(term)) {
+          score += 1;
+
+          // Bonus for exact word match
+          const wordBoundaryRegex = new RegExp(`\\b${term}\\b`, 'i');
+          if (wordBoundaryRegex.test(fieldValue)) {
+            score += 0.5;
+          }
+        }
+      }
+    }
+
+    return maxScore > 0 ? score / maxScore : 0;
+  }
+
+  /**
+   * Detect the primary key field name for this table
+   * Returns 'id', '{table}_id', or first field ending in '_id'
+   */
+  private detectIdField(): string {
+    // Default to 'id'
+    // In a real implementation, this should query the schema
+    // For now, try common patterns
+    const singularTable = this.tableName.replace(/s$/, ''); // services → service
+    return `${singularTable}_id`;
   }
 }
