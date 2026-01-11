@@ -71,6 +71,58 @@ async function searchExample() {
               category: 2.0,      // Category matches are important
               description: 1.0,   // Description matches are least important
             },
+
+            // ========================================
+            // GEO-SEARCH CONFIGURATION
+            // ========================================
+            // Enable location-based search with latitude/longitude
+            geo: {
+              enabled: true,
+              latitudeField: 'latitude',    // Column name for latitude
+              longitudeField: 'longitude',   // Column name for longitude
+              locationNameField: 'city',     // Optional: column for city/location name
+
+              // Use pre-defined major city buckets for regional grouping
+              // buckets: MAJOR_CITY_BUCKETS, // Uncomment to use pre-defined cities
+
+              // Enable automatic location name normalization
+              // This handles variations like "NYC" -> "New York City"
+              autoNormalize: true,
+
+              // Default search radius when not specified
+              defaultRadius: { value: 25, unit: 'km' },
+
+              // Maximum allowed search radius (prevents very broad searches)
+              maxRadius: { value: 500, unit: 'km' },
+
+              // Combine with text search for powerful "pizza near me" queries
+              combineWithTextSearch: true,
+
+              // Custom location mappings for your specific use case
+              locationMappings: [
+                {
+                  original: 'Bay Area',
+                  canonical: 'San Francisco',
+                  coordinates: { lat: 37.7749, lng: -122.4194 },
+                  aliases: ['SF Bay Area', 'Silicon Valley', 'SFO'],
+                },
+                {
+                  original: 'Tri-State Area',
+                  canonical: 'New York City',
+                  coordinates: { lat: 40.7128, lng: -74.006 },
+                  aliases: ['NYC Metro', 'Greater NYC'],
+                },
+              ],
+
+              // Common location aliases
+              commonAliases: {
+                'NYC': 'New York City',
+                'LA': 'Los Angeles',
+                'SF': 'San Francisco',
+                'Chi-town': 'Chicago',
+                'H-Town': 'Houston',
+              },
+            },
           },
         },
       },
@@ -354,6 +406,15 @@ async function initializeDatabase() {
  */
 export function createSearchAPI() {
   const app = express();
+
+  // Enable CORS for all routes
+  app.use((_req, res, next) => {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    next();
+  });
+
   app.use(express.json());
 
   // Health check endpoint
@@ -606,6 +667,115 @@ export function createSearchAPI() {
     }
   });
 
+  /**
+   * GET /api/analytics/slow-queries
+   *
+   * Get slowest queries from __sqldb_query_stats table
+   */
+  app.get('/api/analytics/slow-queries', async (_req: Request, res: Response) => {
+    try {
+      const { limit = 20 } = _req.query;
+
+      const db = await initializeDatabase();
+
+      // Query the __sqldb_query_stats table for slowest queries
+      const slowQueries = await db.raw(`
+        SELECT
+          query_id,
+          table_name,
+          query_type,
+          filters,
+          execution_time_ms,
+          cache_hit,
+          timestamp,
+          created_at
+        FROM __sqldb_query_stats
+        ORDER BY execution_time_ms DESC
+        LIMIT ?
+      `, [parseInt(String(limit), 10)]) as any[];
+
+      res.json({
+        success: true,
+        queries: slowQueries,
+        count: slowQueries.length,
+      });
+    } catch (error: any) {
+      console.error('Slow queries error:', error);
+      res.status(500).json({
+        error: 'Failed to fetch slow queries',
+        message: error.message,
+      });
+    }
+  });
+
+  /**
+   * GET /api/analytics/query-stats
+   *
+   * Get aggregated query statistics
+   */
+  app.get('/api/analytics/query-stats', async (_req: Request, res: Response) => {
+    try {
+      const db = await initializeDatabase();
+
+      const stats = await db.raw(`
+        SELECT
+          COUNT(*) as total_queries,
+          AVG(execution_time_ms) as avg_execution_time,
+          MAX(execution_time_ms) as max_execution_time,
+          MIN(execution_time_ms) as min_execution_time,
+          SUM(CASE WHEN cache_hit = 1 THEN 1 ELSE 0 END) as cache_hits,
+          SUM(CASE WHEN cache_hit = 0 THEN 1 ELSE 0 END) as cache_misses
+        FROM __sqldb_query_stats
+        WHERE created_at >= DATE_SUB(NOW(), INTERVAL 1 HOUR)
+      `) as any[];
+
+      const queryTypeStats = await db.raw(`
+        SELECT
+          query_type,
+          COUNT(*) as count,
+          AVG(execution_time_ms) as avg_time
+        FROM __sqldb_query_stats
+        WHERE created_at >= DATE_SUB(NOW(), INTERVAL 1 HOUR)
+        GROUP BY query_type
+        ORDER BY count DESC
+      `) as any[];
+
+      const tableStats = await db.raw(`
+        SELECT
+          table_name,
+          COUNT(*) as count,
+          AVG(execution_time_ms) as avg_time
+        FROM __sqldb_query_stats
+        WHERE created_at >= DATE_SUB(NOW(), INTERVAL 1 HOUR)
+        GROUP BY table_name
+        ORDER BY count DESC
+        LIMIT 10
+      `) as any[];
+
+      res.json({
+        success: true,
+        overall: stats[0],
+        byQueryType: queryTypeStats,
+        byTable: tableStats,
+      });
+    } catch (error: any) {
+      console.error('Query stats error:', error);
+      res.status(500).json({
+        error: 'Failed to fetch query stats',
+        message: error.message,
+      });
+    }
+  });
+
+  /**
+   * GET /admin
+   *
+   * Serve the admin UI
+   */
+  app.get('/admin', (_req: Request, res: Response) => {
+    res.sendFile(__dirname + '/admin-ui.html');
+  });
+
   return app;
 }
 
@@ -617,28 +787,32 @@ export async function startSearchAPI(port: number = 3000) {
 
   return new Promise<void>((resolve, reject) => {
     const server = app.listen(port, () => {
-      console.log(`\n🚀 Search API Server Running`);
+      console.log(`\n🚀 SqlDB Search API Server Running`);
       console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
-      console.log(`📍 URL: http://localhost:${port}`);
-      console.log(`\n📚 Available Endpoints:`);
+      console.log(`📍 Server URL: http://localhost:${port}`);
+      console.log(`🎨 Admin UI:   http://localhost:${port}/admin`);
+      console.log(`\n📚 API Endpoints:`);
+      console.log(`\n  Search:`);
       console.log(`   GET  /health`);
       console.log(`   GET  /api/search/services?q=plumbing&limit=10`);
       console.log(`   POST /api/search/services`);
+      console.log(`   POST /api/search/autocomplete`);
+      console.log(`\n  Index Management:`);
       console.log(`   POST /api/search/index/services/build`);
       console.log(`   GET  /api/search/index/services/stats`);
-      console.log(`   POST /api/search/autocomplete`);
+      console.log(`\n  Analytics:`);
+      console.log(`   GET  /api/analytics/slow-queries`);
+      console.log(`   GET  /api/analytics/query-stats`);
       console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`);
-      console.log(`💡 Example requests:\n`);
+      console.log(`💡 Quick Start:\n`);
+      console.log(`   1. Open Admin UI: http://localhost:${port}/admin`);
+      console.log(`   2. Build search index (if not built)`);
+      console.log(`   3. Start searching!\n`);
+      console.log(`🔧 Example cURL requests:\n`);
       console.log(`   # Simple search`);
       console.log(`   curl "http://localhost:${port}/api/search/services?q=plumbing&limit=5"\n`);
-      console.log(`   # Advanced search`);
-      console.log(`   curl -X POST http://localhost:${port}/api/search/services \\`);
-      console.log(`     -H "Content-Type: application/json" \\`);
-      console.log(`     -d '{"query":"plumbing repair","limit":10,"highlightFields":["title","description"]}'\n`);
-      console.log(`   # Build index`);
-      console.log(`   curl -X POST http://localhost:${port}/api/search/index/services/build\n`);
-      console.log(`   # Get stats`);
-      console.log(`   curl http://localhost:${port}/api/search/index/services/stats\n`);
+      console.log(`   # Get slow queries`);
+      console.log(`   curl "http://localhost:${port}/api/analytics/slow-queries?limit=10"\n`);
 
       resolve();
     });

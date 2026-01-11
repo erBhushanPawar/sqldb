@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SqlDB Admin - Search & Performance Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+    body { font-family: 'Inter', sans-serif; }
+    .highlight mark { background-color: #fef08a; padding: 2px 4px; border-radius: 2px; }
+  </style>
+</head>
+<body class="bg-gray-50">
+  <div class="min-h-screen">
+    <!-- Header -->
+    <header class="bg-white border-b border-gray-200">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center space-x-3">
+            <div class="bg-blue-600 p-2 rounded-lg">
+              <i data-lucide="database" class="w-6 h-6 text-white"></i>
+            </div>
+            <div>
+              <h1 class="text-2xl font-bold text-gray-900">SqlDB Admin</h1>
+              <p class="text-sm text-gray-500">Search & Performance Dashboard</p>
+            </div>
+          </div>
+          <div class="flex items-center space-x-4">
+            <div class="flex items-center space-x-2">
+              <span class="relative flex h-3 w-3">
+                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                <span class="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
+              </span>
+              <span class="text-sm text-gray-600">Connected</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <!-- Stats Cards -->
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+        <div class="bg-white rounded-lg shadow p-6">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-sm font-medium text-gray-600">Total Documents</p>
+              <p id="stat-docs" class="text-2xl font-bold text-gray-900">-</p>
+            </div>
+            <div class="bg-blue-100 p-3 rounded-lg">
+              <i data-lucide="file-text" class="w-6 h-6 text-blue-600"></i>
+            </div>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-lg shadow p-6">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-sm font-medium text-gray-600">Indexed Terms</p>
+              <p id="stat-terms" class="text-2xl font-bold text-gray-900">-</p>
+            </div>
+            <div class="bg-green-100 p-3 rounded-lg">
+              <i data-lucide="hash" class="w-6 h-6 text-green-600"></i>
+            </div>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-lg shadow p-6">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-sm font-medium text-gray-600">Avg Search Time</p>
+              <p id="stat-time" class="text-2xl font-bold text-gray-900">-</p>
+            </div>
+            <div class="bg-purple-100 p-3 rounded-lg">
+              <i data-lucide="zap" class="w-6 h-6 text-purple-600"></i>
+            </div>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-lg shadow p-6">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-sm font-medium text-gray-600">Cache Hit Rate</p>
+              <p id="stat-cache" class="text-2xl font-bold text-gray-900">-</p>
+            </div>
+            <div class="bg-yellow-100 p-3 rounded-lg">
+              <i data-lucide="trending-up" class="w-6 h-6 text-yellow-600"></i>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tabs -->
+      <div class="bg-white rounded-lg shadow mb-8">
+        <div class="border-b border-gray-200">
+          <nav class="flex -mb-px">
+            <button onclick="switchTab('search')" id="tab-search" class="tab-button active px-6 py-3 text-sm font-medium border-b-2 border-blue-600 text-blue-600">
+              <i data-lucide="search" class="w-4 h-4 inline mr-2"></i>
+              Search Testing
+            </button>
+            <button onclick="switchTab('performance')" id="tab-performance" class="tab-button px-6 py-3 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300">
+              <i data-lucide="activity" class="w-4 h-4 inline mr-2"></i>
+              Performance
+            </button>
+            <button onclick="switchTab('queries')" id="tab-queries" class="tab-button px-6 py-3 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300">
+              <i data-lucide="database" class="w-4 h-4 inline mr-2"></i>
+              Slow Queries
+            </button>
+            <button onclick="switchTab('index')" id="tab-index" class="tab-button px-6 py-3 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300">
+              <i data-lucide="settings" class="w-4 h-4 inline mr-2"></i>
+              Index Management
+            </button>
+          </nav>
+        </div>
+
+        <!-- Search Testing Tab -->
+        <div id="content-search" class="tab-content p-6">
+          <div class="space-y-6">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-2">Search Query</label>
+              <div class="flex space-x-2">
+                <input
+                  type="text"
+                  id="search-input"
+                  placeholder="Enter search query (e.g., plumbing repair)"
+                  class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  onkeypress="if(event.key === 'Enter') performSearch()"
+                />
+                <button onclick="performSearch()" class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium">
+                  Search
+                </button>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Limit</label>
+                <input type="number" id="search-limit" value="10" class="w-full px-4 py-2 border border-gray-300 rounded-lg" />
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Min Score</label>
+                <input type="number" id="search-minscore" value="0" step="0.1" class="w-full px-4 py-2 border border-gray-300 rounded-lg" />
+              </div>
+            </div>
+
+            <div class="flex items-center space-x-4">
+              <label class="flex items-center space-x-2">
+                <input type="checkbox" id="highlight-title" checked class="rounded border-gray-300" />
+                <span class="text-sm text-gray-700">Highlight Title</span>
+              </label>
+              <label class="flex items-center space-x-2">
+                <input type="checkbox" id="highlight-desc" checked class="rounded border-gray-300" />
+                <span class="text-sm text-gray-700">Highlight Description</span>
+              </label>
+            </div>
+
+            <div id="search-results" class="mt-6"></div>
+          </div>
+        </div>
+
+        <!-- Performance Tab -->
+        <div id="content-performance" class="tab-content p-6 hidden">
+          <div class="space-y-6">
+            <div>
+              <h3 class="text-lg font-semibold mb-4">Search Performance Comparison</h3>
+              <button onclick="runBenchmark()" class="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 font-medium">
+                Run Benchmark
+              </button>
+            </div>
+            <div id="benchmark-results" class="mt-4"></div>
+
+            <div class="mt-8">
+              <h3 class="text-lg font-semibold mb-4">Query Statistics</h3>
+              <div id="query-stats"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Slow Queries Tab -->
+        <div id="content-queries" class="tab-content p-6 hidden">
+          <div class="flex justify-between items-center mb-4">
+            <h3 class="text-lg font-semibold">Slowest Queries</h3>
+            <button onclick="loadSlowQueries()" class="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 font-medium text-sm">
+              Refresh
+            </button>
+          </div>
+          <div id="slow-queries" class="space-y-4"></div>
+        </div>
+
+        <!-- Index Management Tab -->
+        <div id="content-index" class="tab-content p-6 hidden">
+          <div class="space-y-6">
+            <div>
+              <h3 class="text-lg font-semibold mb-4">Index Statistics</h3>
+              <div id="index-stats" class="bg-gray-50 rounded-lg p-4"></div>
+            </div>
+
+            <div class="flex space-x-4">
+              <button onclick="buildIndex()" class="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium">
+                Build Index
+              </button>
+              <button onclick="rebuildIndex()" class="px-6 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 font-medium">
+                Rebuild Index
+              </button>
+            </div>
+
+            <div id="index-build-log" class="mt-4"></div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    const API_BASE = 'http://localhost:3090';
+
+    // Initialize Lucide icons
+    lucide.createIcons();
+
+    // Load initial stats
+    loadStats();
+
+    // Tab switching
+    function switchTab(tab) {
+      document.querySelectorAll('.tab-button').forEach(btn => {
+        btn.classList.remove('active', 'border-blue-600', 'text-blue-600');
+        btn.classList.add('border-transparent', 'text-gray-500');
+      });
+      document.querySelectorAll('.tab-content').forEach(content => {
+        content.classList.add('hidden');
+      });
+
+      document.getElementById(`tab-${tab}`).classList.add('active', 'border-blue-600', 'text-blue-600');
+      document.getElementById(`content-${tab}`).classList.remove('hidden');
+
+      if (tab === 'queries') loadSlowQueries();
+      if (tab === 'index') loadIndexStats();
+    }
+
+    // Load stats
+    async function loadStats() {
+      try {
+        const response = await fetch(`${API_BASE}/api/search/index/services/stats`);
+        const data = await response.json();
+
+        if (data.success) {
+          document.getElementById('stat-docs').textContent = data.stats.totalDocuments.toLocaleString();
+          document.getElementById('stat-terms').textContent = data.stats.totalTerms.toLocaleString();
+          document.getElementById('stat-time').textContent = '-';
+          document.getElementById('stat-cache').textContent = '-';
+        }
+      } catch (error) {
+        console.error('Failed to load stats:', error);
+      }
+    }
+
+    // Perform search
+    async function performSearch() {
+      const query = document.getElementById('search-input').value;
+      if (!query) return;
+
+      const limit = parseInt(document.getElementById('search-limit').value);
+      const minScore = parseFloat(document.getElementById('search-minscore').value);
+      const highlightFields = [];
+
+      if (document.getElementById('highlight-title').checked) highlightFields.push('title');
+      if (document.getElementById('highlight-desc').checked) highlightFields.push('description');
+
+      const resultsDiv = document.getElementById('search-results');
+      resultsDiv.innerHTML = '<div class="text-center py-8"><div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div></div>';
+
+      try {
+        const startTime = performance.now();
+        const response = await fetch(`${API_BASE}/api/search/services`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query, limit, minScore, highlightFields })
+        });
+        const data = await response.json();
+        const endTime = performance.now();
+
+        document.getElementById('stat-time').textContent = `${Math.round(endTime - startTime)}ms`;
+
+        if (data.success && data.results > 0) {
+          resultsDiv.innerHTML = `
+            <div class="mb-4 flex items-center justify-between">
+              <p class="text-sm text-gray-600">Found ${data.results} results in ${data.meta.searchTimeMs}ms</p>
+            </div>
+            <div class="space-y-4">
+              ${data.data.map(result => `
+                <div class="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                  <div class="flex items-start justify-between">
+                    <div class="flex-1">
+                      <h4 class="font-semibold text-gray-900 mb-1 highlight">
+                        ${result.highlights?.title || result.data.title}
+                      </h4>
+                      <p class="text-sm text-gray-600 mb-2 highlight">
+                        ${result.highlights?.description || result.data.description?.substring(0, 200)}...
+                      </p>
+                      <div class="flex items-center space-x-4 text-xs text-gray-500">
+                        <span class="flex items-center">
+                          <i data-lucide="tag" class="w-3 h-3 mr-1"></i>
+                          ${result.data.category}
+                        </span>
+                        <span class="flex items-center">
+                          <i data-lucide="dollar-sign" class="w-3 h-3 mr-1"></i>
+                          $${result.data.price}
+                        </span>
+                      </div>
+                    </div>
+                    <div class="ml-4 flex flex-col items-end">
+                      <div class="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-xs font-semibold">
+                        Score: ${(result.score * 100).toFixed(1)}%
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          `;
+          lucide.createIcons();
+        } else {
+          resultsDiv.innerHTML = '<div class="text-center py-8 text-gray-500">No results found</div>';
+        }
+      } catch (error) {
+        resultsDiv.innerHTML = `<div class="text-center py-8 text-red-500">Error: ${error.message}</div>`;
+      }
+    }
+
+    // Run benchmark
+    async function runBenchmark() {
+      const resultsDiv = document.getElementById('benchmark-results');
+      resultsDiv.innerHTML = '<div class="text-center py-8"><div class="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto"></div></div>';
+
+      const testQueries = ['plumbing', 'electrical repair', 'emergency service', 'installation'];
+      const results = [];
+
+      for (const query of testQueries) {
+        const start = performance.now();
+        await fetch(`${API_BASE}/api/search/services?q=${query}&limit=10`);
+        const duration = performance.now() - start;
+        results.push({ query, duration });
+      }
+
+      const avgTime = results.reduce((sum, r) => sum + r.duration, 0) / results.length;
+
+      resultsDiv.innerHTML = `
+        <div class="bg-gray-50 rounded-lg p-6">
+          <div class="mb-4">
+            <p class="text-2xl font-bold text-gray-900">${Math.round(avgTime)}ms</p>
+            <p class="text-sm text-gray-600">Average search time</p>
+          </div>
+          <div class="space-y-2">
+            ${results.map(r => `
+              <div class="flex items-center justify-between text-sm">
+                <span class="text-gray-600">"${r.query}"</span>
+                <span class="font-semibold text-gray-900">${Math.round(r.duration)}ms</span>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `;
+    }
+
+    // Load slow queries
+    async function loadSlowQueries() {
+      const div = document.getElementById('slow-queries');
+      div.innerHTML = '<div class="text-center py-8"><div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div></div>';
+
+      try {
+        const response = await fetch(`${API_BASE}/api/analytics/slow-queries?limit=20`);
+        const data = await response.json();
+
+        if (data.success && data.count > 0) {
+          div.innerHTML = data.queries.map((query, index) => `
+            <div class="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+              <div class="flex items-start justify-between mb-2">
+                <div class="flex-1">
+                  <div class="flex items-center space-x-2 mb-1">
+                    <span class="text-xs font-semibold text-gray-500">#${index + 1}</span>
+                    <span class="px-2 py-1 bg-purple-100 text-purple-700 rounded text-xs font-medium">
+                      ${query.query_type || 'unknown'}
+                    </span>
+                    <span class="text-xs text-gray-500">${query.table_name}</span>
+                  </div>
+                  <p class="text-sm text-gray-700 font-mono bg-gray-50 p-2 rounded mt-2">
+                    ${query.filters ? JSON.stringify(JSON.parse(query.filters), null, 2) : 'No filters'}
+                  </p>
+                </div>
+                <div class="ml-4 text-right">
+                  <p class="text-lg font-bold ${query.execution_time_ms > 1000 ? 'text-red-600' : query.execution_time_ms > 500 ? 'text-orange-600' : 'text-green-600'}">
+                    ${Math.round(query.execution_time_ms)}ms
+                  </p>
+                  <p class="text-xs text-gray-500">
+                    ${query.cache_hit ? '✓ Cached' : '✗ No cache'}
+                  </p>
+                  <p class="text-xs text-gray-400 mt-1">
+                    ${new Date(query.timestamp).toLocaleString()}
+                  </p>
+                </div>
+              </div>
+            </div>
+          `).join('');
+        } else {
+          div.innerHTML = `
+            <div class="text-center py-8 text-gray-500">
+              <i data-lucide="check-circle" class="w-12 h-12 mx-auto mb-4 text-green-400"></i>
+              <p>No slow queries found</p>
+              <p class="text-sm mt-2">All queries are performing well!</p>
+            </div>
+          `;
+        }
+        lucide.createIcons();
+      } catch (error) {
+        console.error('Failed to load slow queries:', error);
+        div.innerHTML = `
+          <div class="text-center py-8 text-red-500">
+            <i data-lucide="alert-circle" class="w-12 h-12 mx-auto mb-4"></i>
+            <p>Failed to load slow queries</p>
+            <p class="text-sm mt-2">${error.message}</p>
+          </div>
+        `;
+        lucide.createIcons();
+      }
+    }
+
+    // Load index stats
+    async function loadIndexStats() {
+      try {
+        const response = await fetch(`${API_BASE}/api/search/index/services/stats`);
+        const data = await response.json();
+
+        if (data.success) {
+          const stats = data.stats;
+          document.getElementById('index-stats').innerHTML = `
+            <div class="grid grid-cols-2 gap-4">
+              <div>
+                <p class="text-sm text-gray-600">Total Documents</p>
+                <p class="text-lg font-semibold">${stats.totalDocuments.toLocaleString()}</p>
+              </div>
+              <div>
+                <p class="text-sm text-gray-600">Total Terms</p>
+                <p class="text-lg font-semibold">${stats.totalTerms.toLocaleString()}</p>
+              </div>
+              <div>
+                <p class="text-sm text-gray-600">Total Tokens</p>
+                <p class="text-lg font-semibold">${stats.totalTokens.toLocaleString()}</p>
+              </div>
+              <div>
+                <p class="text-sm text-gray-600">Last Build</p>
+                <p class="text-lg font-semibold">${new Date(stats.lastBuildTime).toLocaleString()}</p>
+              </div>
+              <div class="col-span-2">
+                <p class="text-sm text-gray-600">Build Duration</p>
+                <p class="text-lg font-semibold">${stats.buildDurationMs}ms</p>
+              </div>
+            </div>
+          `;
+        }
+      } catch (error) {
+        console.error('Failed to load index stats:', error);
+      }
+    }
+
+    // Build index
+    async function buildIndex() {
+      const logDiv = document.getElementById('index-build-log');
+      logDiv.innerHTML = '<div class="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-800">Building index...</div>';
+
+      try {
+        const response = await fetch(`${API_BASE}/api/search/index/services/build`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ rebuild: false })
+        });
+        const data = await response.json();
+
+        if (data.success) {
+          logDiv.innerHTML = `<div class="bg-green-50 border border-green-200 rounded-lg p-4 text-sm text-green-800">Index built successfully! ${data.stats.totalDocuments} documents indexed.</div>`;
+          loadIndexStats();
+          loadStats();
+        }
+      } catch (error) {
+        logDiv.innerHTML = `<div class="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-800">Error: ${error.message}</div>`;
+      }
+    }
+
+    // Rebuild index
+    async function rebuildIndex() {
+      if (!confirm('Are you sure you want to rebuild the index? This will clear all existing data.')) return;
+
+      const logDiv = document.getElementById('index-build-log');
+      logDiv.innerHTML = '<div class="bg-orange-50 border border-orange-200 rounded-lg p-4 text-sm text-orange-800">Rebuilding index...</div>';
+
+      try {
+        const response = await fetch(`${API_BASE}/api/search/index/services/build`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ rebuild: true })
+        });
+        const data = await response.json();
+
+        if (data.success) {
+          logDiv.innerHTML = `<div class="bg-green-50 border border-green-200 rounded-lg p-4 text-sm text-green-800">Index rebuilt successfully! ${data.stats.totalDocuments} documents indexed in ${data.stats.buildDurationMs}ms.</div>`;
+          loadIndexStats();
+          loadStats();
+        }
+      } catch (error) {
+        logDiv.innerHTML = `<div class="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-800">Error: ${error.message}</div>`;
+      }
+    }
+  </script>
+</body>
+</html>

@@ -25,30 +25,8 @@ export interface InvertedIndexConfig {
       caseSensitive?: boolean;                       // Default: false
       rebuildOnWrite?: boolean;                      // Auto-rebuild on INSERT/UPDATE
       fieldBoosts?: Record<string, number>;          // { title: 2.0, description: 1.0 }
-      geo?: GeoSearchTableConfig;                    // Geo-spatial search configuration
     };
   };
-}
-
-/**
- * Geo-Spatial Search Configuration for a table
- */
-export interface GeoSearchTableConfig {
-  enabled: boolean;
-  latitudeField: string;                             // Column name for latitude
-  longitudeField: string;                            // Column name for longitude
-  locationNameField?: string;                        // Optional: column for city/location name
-  buckets?: any[];                                   // Geographic buckets for regional grouping
-  locationMappings?: any[];                          // Location normalization mappings
-  autoNormalize?: boolean;                           // Enable automatic location name normalization
-  defaultRadius?: { value: number; unit: 'km' | 'mi' | 'm' }; // Default search radius
-  maxRadius?: { value: number; unit: 'km' | 'mi' | 'm' };     // Maximum allowed search radius
-  combineWithTextSearch?: boolean;                   // Combine with text search
-  commonAliases?: Record<string, string>;            // Common location aliases
-  distanceBoost?: Array<{                            // Distance-based relevance boosting
-    distance: { value: number; unit: 'km' | 'mi' | 'm' };
-    boost: number;
-  }>;
 }
 
 export interface FacetConfig {
