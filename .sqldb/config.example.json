@@ -1,0 +1,77 @@
+{
+  "defaults": {
+    "tokenizer": "stemming",
+    "minWordLength": 3,
+    "cache": {
+      "enabled": true,
+      "defaultTTL": 3600
+    },
+    "search": {
+      "enabled": true
+    }
+  },
+  "tables": {
+    "services": {
+      "table": "services",
+      "tokenizer": "stemming",
+      "minWordLength": 3,
+      "searchableFields": [
+        {
+          "field": "title",
+          "boost": 2.0
+        },
+        {
+          "field": "description",
+          "boost": 1.0
+        }
+      ],
+      "geo": {
+        "enabled": true,
+        "latitudeField": "latitude",
+        "longitudeField": "longitude",
+        "locationNameField": "canonical_city_name"
+      }
+    },
+    "users": {
+      "table": "users",
+      "searchableFields": [
+        {
+          "field": "username",
+          "boost": 2.0
+        },
+        {
+          "field": "email",
+          "boost": 1.5
+        },
+        {
+          "field": "bio",
+          "boost": 1.0
+        }
+      ]
+    },
+    "posts": {
+      "table": "posts",
+      "tokenizer": "aggressive",
+      "searchableFields": [
+        {
+          "field": "title",
+          "boost": 3.0
+        },
+        {
+          "field": "content",
+          "boost": 1.0
+        },
+        {
+          "field": "tags",
+          "boost": 2.0
+        }
+      ],
+      "geo": {
+        "enabled": true,
+        "latitudeField": "lat",
+        "longitudeField": "lng",
+        "locationNameField": "location"
+      }
+    }
+  }
+}

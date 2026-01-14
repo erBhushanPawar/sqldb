@@ -68,6 +68,26 @@ export interface TableOperations<T = any> {
   buildSearchIndex?(): Promise<import('../types/search').IndexStats>;
   rebuildSearchIndex?(): Promise<import('../types/search').IndexStats>;
   getSearchStats?(): Promise<import('../types/search').IndexStats | null>;
+
+  // Geo-search operations (clustering)
+  buildGeoIndex?(): Promise<{ indexed: number }>;
+  buildGeoBuckets?(options?: {
+    targetBucketSize?: number;
+    gridSizeKm?: number;
+    minBucketSize?: number;
+  }): Promise<{
+    totalBuckets: number;
+    buckets: import('../types/geo-search').GeoBucket[];
+    avgBucketSize: number;
+  }>;
+  getGeoBuckets?(): Promise<Array<{
+    id: string;
+    center: import('../types/geo-search').GeoPoint;
+    radius: import('../types/geo-search').GeoDistance;
+    count: number;
+    locationName?: string;
+    bounds?: any;
+  }>>;
 }
 
 export interface QueryResult {

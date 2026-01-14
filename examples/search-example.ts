@@ -42,7 +42,7 @@ async function searchExample() {
       user: 'admin',
       password: 'Qx7tV2pW5sR9uY1zA4bC6dE8fG3hJ0kL_mN-pQ8sR1tU4vW',
       database: 'dev_she_careers_bhushan',
-      connectionLimit: 10,
+      connectionLimit: 2,
     },
     redis: {
       host: 'localhost',
@@ -677,9 +677,10 @@ export function createSearchAPI() {
       const { limit = 20 } = _req.query;
 
       const db = await initializeDatabase();
+      const statsTable = db('__sqldb_query_stats');
 
       // Query the __sqldb_query_stats table for slowest queries
-      const slowQueries = await db.raw(`
+      const slowQueries = await statsTable.raw(`
         SELECT
           query_id,
           table_name,

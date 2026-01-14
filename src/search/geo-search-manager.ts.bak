@@ -68,10 +68,7 @@ export class GeoSearchManager {
       throw new Error(`Invalid coordinates for document ${doc.id}: ${JSON.stringify(doc.location)}`);
     }
 
-    const client = this.redis.getClient();
-    if (!client) {
-      throw new Error('Redis client not available');
-    }
+    const client = await this.redis.getClient();
     const pipeline = client.pipeline();
 
     // 1. Add to main geo index using Redis GEOADD
@@ -119,10 +116,7 @@ export class GeoSearchManager {
    * Batch index multiple documents
    */
   async indexDocuments(docs: GeoIndexedDocument[]): Promise<void> {
-    const client = this.redis.getClient();
-    if (!client) {
-      throw new Error('Redis client not available');
-    }
+    const client = await this.redis.getClient();
     const pipeline = client.pipeline();
 
     const mainGeoKey = `${this.indexKeyPrefix}:main`;
@@ -175,13 +169,9 @@ export class GeoSearchManager {
 
   /**
    * Search for documents within a radius
-   * Supports automatic cluster expansion if results are insufficient
    */
   async searchByRadius(options: GeoSearchOptions): Promise<GeoSearchResult[]> {
-    const client = this.redis.getClient();
-    if (!client) {
-      throw new Error('Redis client not available');
-    }
+    const client = await this.redis.getClient();
     const mainGeoKey = `${this.indexKeyPrefix}:main`;
 
     // Convert radius to meters for Redis GEORADIUS
@@ -197,8 +187,8 @@ export class GeoSearchManager {
         radiusM = options.radius.value;
     }
 
-    // Perform initial geo search
-    let results = await client.georadius(
+    // Perform geo search
+    const results = await client.georadius(
       mainGeoKey,
       options.center.lng,
       options.center.lat,
@@ -209,44 +199,8 @@ export class GeoSearchManager {
       ...(options.limit ? ['COUNT', options.limit] : [])
     );
 
-    // Check if cluster expansion is needed
-    const minResults = options.minResults ?? 5;
-    const hasMaxRange = options.maxRange !== undefined;
-    const needsExpansion = hasMaxRange && results.length < minResults;
-
-    if (needsExpansion) {
-      // Convert maxRange to meters
-      let maxRangeM: number;
-      switch (options.maxRange!.unit) {
-        case 'km':
-          maxRangeM = options.maxRange!.value * 1000;
-          break;
-        case 'mi':
-          maxRangeM = options.maxRange!.value * 1609.34;
-          break;
-        default:
-          maxRangeM = options.maxRange!.value;
-      }
-
-      // Only expand if maxRange is larger than current radius
-      if (maxRangeM > radiusM) {
-        // Expand search to maxRange
-        results = await client.georadius(
-          mainGeoKey,
-          options.center.lng,
-          options.center.lat,
-          maxRangeM,
-          'm',
-          'WITHDIST',
-          'ASC',
-          ...(options.limit ? ['COUNT', options.limit] : [])
-        );
-      }
-    }
-
     // Process results
     const geoResults: GeoSearchResult[] = [];
-    const originalRadiusM = radiusM;
 
     for (const result of results) {
       const [id, distanceStr] = result as [string, string];
@@ -270,16 +224,8 @@ export class GeoSearchManager {
       } = docData;
 
       // Calculate relevance score based on distance
-      // Results within original radius get higher scores
-      const maxDistance = needsExpansion ? this.convertToMeters(options.maxRange!) : radiusM;
-      const baseDistanceScore = 1 - distance / maxDistance;
-
-      // Apply penalty for results outside original radius (if expansion occurred)
-      let distanceScore = baseDistanceScore;
-      if (needsExpansion && distance > originalRadiusM) {
-        // Results beyond original radius get a penalty (0.7x score)
-        distanceScore = baseDistanceScore * 0.7;
-      }
+      const maxDistance = radiusM;
+      const distanceScore = 1 - distance / maxDistance;
 
       // Apply distance boost if configured
       let boost = 1.0;
@@ -381,10 +327,7 @@ export class GeoSearchManager {
     buckets: GeoBucket[];
     avgBucketSize: number;
   }> {
-    const client = this.redis.getClient();
-    if (!client) {
-      throw new Error('Redis client not available');
-    }
+    const client = await this.redis.getClient();
     const mainGeoKey = `${this.indexKeyPrefix}:main`;
 
     // 1. Fetch all document IDs and their coordinates
@@ -409,25 +352,12 @@ export class GeoSearchManager {
     }> = [];
 
     for (let i = 0; i < allMembers.length; i++) {
-      const posResult = positions![i][1];
-
-      // GEOPOS returns an array with [longitude, latitude] as the first element
-      const pos = posResult ? posResult[0] : null;
-
-      if (!pos || !Array.isArray(pos) || pos.length !== 2) {
-        console.warn(`No valid position data for member ${allMembers[i]}, got:`, posResult);
-        continue;
-      }
+      const pos = positions![i][1] as [string, string] | null;
+      if (!pos) continue;
 
       const [lngStr, latStr] = pos;
       const lng = parseFloat(lngStr);
       const lat = parseFloat(latStr);
-
-      // Skip records with invalid coordinates
-      if (isNaN(lat) || isNaN(lng)) {
-        console.warn(`Skipping member ${allMembers[i]} with invalid coordinates: lat=${latStr}→${lat}, lng=${lngStr}→${lng}`);
-        continue;
-      }
 
       // Fetch location name if available
       const docKey = `${this.indexKeyPrefix}:doc:${allMembers[i]}`;
@@ -484,66 +414,15 @@ export class GeoSearchManager {
     }
 
     // 6. Store buckets in Redis
-
-    // IMPORTANT: ioredis SCAN needs manual prefix, but DEL auto-prefixes
-    const keyPrefix = (client as any).options?.keyPrefix || '';
-
-    // Clear existing buckets FIRST (not in pipeline) - Use SCAN instead of KEYS
-    const oldBucketKeys: string[] = [];
-    const oldBucketDataKeys: string[] = [];
-
-    // Scan for old bucket keys - SCAN pattern needs manual prefix
-    let bucketCursor = '0';
-    do {
-      const [nextCursor, matchedKeys] = await client.scan(
-        bucketCursor,
-        'MATCH',
-        `${keyPrefix}${this.indexKeyPrefix}:bucket:*`,
-        'COUNT',
-        100
-      );
-      bucketCursor = nextCursor;
-      oldBucketKeys.push(...matchedKeys);
-    } while (bucketCursor !== '0');
-
-    // Scan for old bucket-data keys - SCAN pattern needs manual prefix
-    let dataCursor = '0';
-    do {
-      const [nextCursor, matchedKeys] = await client.scan(
-        dataCursor,
-        'MATCH',
-        `${keyPrefix}${this.indexKeyPrefix}:bucket-data:*`,
-        'COUNT',
-        100
-      );
-      dataCursor = nextCursor;
-      oldBucketDataKeys.push(...matchedKeys);
-    } while (dataCursor !== '0');
-
-    console.log(`🧹 Clearing ${oldBucketKeys.length} old bucket keys and ${oldBucketDataKeys.length} old bucket-data keys`);
-
-    // DEL auto-adds prefix, so strip it from SCAN results
-    if (oldBucketKeys.length > 0) {
-      const keysWithoutPrefix = oldBucketKeys.map(k =>
-        k.startsWith(keyPrefix) ? k.substring(keyPrefix.length) : k
-      );
-      await client.del(...keysWithoutPrefix);
-    }
-    if (oldBucketDataKeys.length > 0) {
-      const keysWithoutPrefix = oldBucketDataKeys.map(k =>
-        k.startsWith(keyPrefix) ? k.substring(keyPrefix.length) : k
-      );
-      await client.del(...keysWithoutPrefix);
-    }
-
-    // Now create pipeline for storing new buckets
     const storePipeline = client.pipeline();
 
-    // Store new buckets
-    console.log(`💾 Storing ${buckets.length} new geo-buckets with prefix: ${this.indexKeyPrefix}`);
-    console.log(`   Redis client status: ${client.status}`);
-    console.log(`   Sample key to store: ${this.indexKeyPrefix}:bucket-data:bucket_1`);
+    // Clear existing buckets
+    const oldBucketKeys = await client.keys(`${this.indexKeyPrefix}:bucket:*`);
+    if (oldBucketKeys.length > 0) {
+      storePipeline.del(...oldBucketKeys);
+    }
 
+    // Store new buckets
     for (const bucket of buckets) {
       const bucketKey = `${this.indexKeyPrefix}:bucket:${bucket.id}`;
       const bucketDataKey = `${this.indexKeyPrefix}:bucket-data:${bucket.id}`;
@@ -564,45 +443,7 @@ export class GeoSearchManager {
       }));
     }
 
-    const pipelineResults = await storePipeline.exec();
-    console.log(`✅ Stored buckets to Redis. Pipeline executed ${pipelineResults?.length || 0} commands`);
-
-    // Check for errors in pipeline results
-    if (pipelineResults) {
-      const errors = pipelineResults.filter(([err]) => err !== null);
-      if (errors.length > 0) {
-        console.error(`❌ Pipeline execution had ${errors.length} errors:`, errors.slice(0, 3));
-      }
-    }
-
-    // Verify storage using SCAN instead of KEYS - SCAN pattern needs manual prefix
-    const verifyKeys: string[] = [];
-    let verifyCursor = '0';
-    do {
-      const [nextCursor, matchedKeys] = await client.scan(
-        verifyCursor,
-        'MATCH',
-        `${keyPrefix}${this.indexKeyPrefix}:bucket-data:*`,
-        'COUNT',
-        100
-      );
-      verifyCursor = nextCursor;
-      verifyKeys.push(...matchedKeys);
-    } while (verifyCursor !== '0');
-
-    console.log(`✔️  Verification: ${verifyKeys.length} bucket-data keys now exist in Redis`);
-
-    if (verifyKeys.length === 0 && buckets.length > 0) {
-      console.error(`⚠️  STORAGE FAILED! Expected ${buckets.length} keys but found 0`);
-      console.error(`   Index key prefix: ${this.indexKeyPrefix}`);
-      console.error(`   Redis keyPrefix: ${keyPrefix}`);
-      console.error(`   Sample bucket key would be: ${keyPrefix}${this.indexKeyPrefix}:bucket-data:bucket_1`);
-
-      // Try to manually check one key - GET auto-adds prefix
-      const testKey = `${this.indexKeyPrefix}:bucket-data:bucket_1`;
-      const testValue = await client.get(testKey);
-      console.error(`   Manual check of ${testKey}: ${testValue ? 'EXISTS' : 'NOT FOUND'}`);
-    }
+    await storePipeline.exec();
 
     // Calculate stats
     const totalItems = buckets.reduce((sum, b) => sum + (b.members?.length || 0), 0);
@@ -626,65 +467,16 @@ export class GeoSearchManager {
     locationName?: string;
     bounds?: any;
   }>> {
-    const client = this.redis.getClient();
-    if (!client) {
-      throw new Error('Redis client not available');
-    }
-
-    // IMPORTANT: ioredis SCAN command does NOT auto-prefix patterns
-    // We need to manually add the keyPrefix for SCAN patterns
-    const keyPrefix = (client as any).options?.keyPrefix || '';
-    const searchPattern = `${keyPrefix}${this.indexKeyPrefix}:bucket-data:*`;
-    console.log(`🔍 Searching for geo-buckets with pattern: ${searchPattern}`);
-
-    // Use SCAN instead of KEYS - SCAN patterns need manual prefix
-    const bucketDataKeys: string[] = [];
-    let cursor = '0';
-
-    do {
-      const [nextCursor, matchedKeys] = await client.scan(
-        cursor,
-        'MATCH',
-        searchPattern,
-        'COUNT',
-        100
-      );
-      cursor = nextCursor;
-      bucketDataKeys.push(...matchedKeys);
-    } while (cursor !== '0');
-
-    console.log(`📋 Found ${bucketDataKeys.length} bucket data keys:`, bucketDataKeys.slice(0, 5));
+    const client = await this.redis.getClient();
+    const bucketDataKeys = await client.keys(`${this.indexKeyPrefix}:bucket-data:*`);
 
     if (bucketDataKeys.length === 0) {
-      // Check if any geo keys exist at all using SCAN
-      const allGeoKeys: string[] = [];
-      let geoCursor = '0';
-
-      do {
-        const [nextCursor, matchedKeys] = await client.scan(
-          geoCursor,
-          'MATCH',
-          `${keyPrefix}${this.indexKeyPrefix}:*`,
-          'COUNT',
-          100
-        );
-        geoCursor = nextCursor;
-        allGeoKeys.push(...matchedKeys);
-      } while (geoCursor !== '0' && allGeoKeys.length < 20);
-
-      console.log(`ℹ️  Total geo keys for ${this.tableName}:`, allGeoKeys.length);
-      if (allGeoKeys.length > 0) {
-        console.log(`   Sample keys:`, allGeoKeys.slice(0, 10));
-      }
       return [];
     }
 
-    // For GET commands, ioredis auto-adds prefix, so we need to strip it from SCAN results
     const pipeline = client.pipeline();
     for (const key of bucketDataKeys) {
-      // Remove the prefix from the key since GET will add it back
-      const keyWithoutPrefix = key.startsWith(keyPrefix) ? key.substring(keyPrefix.length) : key;
-      pipeline.get(keyWithoutPrefix);
+      pipeline.get(key);
     }
 
     const results = await pipeline.exec();
@@ -697,7 +489,6 @@ export class GeoSearchManager {
       }
     }
 
-    console.log(`✅ Retrieved ${buckets.length} geo-buckets from Redis`);
     return buckets;
   }
 
@@ -853,10 +644,7 @@ export class GeoSearchManager {
    * Get index statistics
    */
   async getStats(): Promise<GeoIndexStats> {
-    const client = this.redis.getClient();
-    if (!client) {
-      throw new Error('Redis client not available');
-    }
+    const client = await this.redis.getClient();
     const mainGeoKey = `${this.indexKeyPrefix}:main`;
 
     // Get total documents
@@ -902,10 +690,7 @@ export class GeoSearchManager {
    * Clear all geo indexes for this table
    */
   async clearIndex(): Promise<void> {
-    const client = this.redis.getClient();
-    if (!client) {
-      throw new Error('Redis client not available');
-    }
+    const client = await this.redis.getClient();
     const keys = await client.keys(`${this.indexKeyPrefix}:*`);
 
     if (keys.length > 0) {

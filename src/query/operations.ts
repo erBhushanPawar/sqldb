@@ -9,6 +9,8 @@ import { generateQueryId } from './query-tracker';
 import { SearchOptions, SearchResult, IndexStats } from '../types/search';
 import { InvertedIndexManager } from '../search/inverted-index-manager';
 import { SearchRanker } from '../search/search-ranker';
+import { GeoSearchManager } from '../search/geo-search-manager';
+import { GeoPoint, GeoDistance } from '../types/geo-search';
 
 export class TableOperationsImpl<T = any> implements TableOperations<T> {
   private tableName: string;
@@ -20,6 +22,7 @@ export class TableOperationsImpl<T = any> implements TableOperations<T> {
   private statsTracker?: QueryStatsTracker;
   private indexManager?: InvertedIndexManager;
   private searchRanker?: SearchRanker;
+  private geoSearchManager?: GeoSearchManager;
 
   constructor(
     tableName: string,
@@ -30,7 +33,8 @@ export class TableOperationsImpl<T = any> implements TableOperations<T> {
     cacheConfig: Required<CacheConfig>,
     statsTracker?: QueryStatsTracker,
     indexManager?: InvertedIndexManager,
-    searchRanker?: SearchRanker
+    searchRanker?: SearchRanker,
+    geoSearchManager?: GeoSearchManager
   ) {
     this.tableName = tableName;
     this.dbManager = dbManager;
@@ -41,6 +45,7 @@ export class TableOperationsImpl<T = any> implements TableOperations<T> {
     this.statsTracker = statsTracker;
     this.indexManager = indexManager;
     this.searchRanker = searchRanker;
+    this.geoSearchManager = geoSearchManager;
   }
 
   async findOne(where: WhereClause<T>, options?: FindOptions): Promise<T | null> {
@@ -852,7 +857,7 @@ export class TableOperationsImpl<T = any> implements TableOperations<T> {
   /**
    * Build search index for this table from scratch
    */
-  async buildSearchIndex(): Promise<IndexStats> {
+  async buildSearchIndex(): Promise<IndexStats & { geoBuckets?: any }> {
     if (!this.indexManager) {
       throw new Error(
         `Search is not enabled for table "${this.tableName}". ` +
@@ -866,7 +871,26 @@ export class TableOperationsImpl<T = any> implements TableOperations<T> {
     // Build the index
     const stats = await this.indexManager.buildIndex(this.tableName, records as any[]);
 
-    return stats;
+    // If geo-search is enabled, automatically build geo-buckets
+    let geoBucketStats;
+    if (this.geoSearchManager) {
+      try {
+        geoBucketStats = await this.geoSearchManager.buildGeoBuckets({
+          targetBucketSize: 5,
+          gridSizeKm: 10,
+          minBucketSize: 3,
+        });
+        console.log(`✅ Geo-buckets built: ${geoBucketStats.totalBuckets} buckets created`);
+      } catch (error) {
+        console.error('Failed to build geo-buckets:', error);
+        // Don't fail the entire index build if geo-buckets fail
+      }
+    }
+
+    return {
+      ...stats,
+      geoBuckets: geoBucketStats,
+    };
   }
 
   /**
@@ -944,5 +968,51 @@ export class TableOperationsImpl<T = any> implements TableOperations<T> {
     // For now, try common patterns
     const singularTable = this.tableName.replace(/s$/, ''); // services → service
     return `${singularTable}_id`;
+  }
+
+  /**
+   * Build geo-buckets with dynamic clustering for this table
+   * Groups geographic points into clusters based on proximity
+   *
+   * @param options - Clustering configuration
+   * @returns Bucket statistics and list of created buckets
+   */
+  async buildGeoBuckets(options?: {
+    targetBucketSize?: number;
+    gridSizeKm?: number;
+    minBucketSize?: number;
+  }) {
+    if (!this.geoSearchManager) {
+      throw new Error(
+        `Geo-search is not enabled for table "${this.tableName}". ` +
+        'Configure geo-search in SqlDBConfig for this table.'
+      );
+    }
+
+    const defaultOptions = {
+      targetBucketSize: 5,
+      gridSizeKm: 10,
+      minBucketSize: 3,
+      ...options,
+    };
+
+    return await this.geoSearchManager.buildGeoBuckets(defaultOptions);
+  }
+
+  /**
+   * Get all pre-computed geo-buckets for this table
+   * Returns clusters that were created by buildGeoBuckets()
+   *
+   * @returns List of geo-buckets with metadata
+   */
+  async getGeoBuckets() {
+    if (!this.geoSearchManager) {
+      throw new Error(
+        `Geo-search is not enabled for table "${this.tableName}". ` +
+        'Configure geo-search in SqlDBConfig for this table.'
+      );
+    }
+
+    return await this.geoSearchManager.getGeoBuckets();
   }
 }

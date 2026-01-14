@@ -4,11 +4,13 @@ import { useState, useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Database, Search, BarChart3, Zap, Table2, Code } from 'lucide-react';
+import { Database, Search, BarChart3, Zap, Table2, Code, Map } from 'lucide-react';
 
 // Import feature components
 import { DashboardStats } from '@/components/dashboard/stats';
 import { SearchInterface } from '@/components/features/search';
+import { SearchConfigInterface } from '@/components/features/search-config';
+import { GeoMapVisualization } from '@/components/features/geo-map';
 import { PerformanceAnalytics } from '@/components/features/performance';
 import { SlowQueriesMonitor } from '@/components/features/slow-queries';
 import { CrudInterface } from '@/components/features/crud';
@@ -79,14 +81,22 @@ export default function Home() {
 
         {/* Feature Tabs */}
         <Tabs defaultValue="crud" className="mt-8">
-          <TabsList className="grid w-full grid-cols-7 lg:w-auto">
+          <TabsList className="grid w-full grid-cols-4 lg:grid-cols-9 lg:w-auto">
             <TabsTrigger value="crud" className="gap-2">
               <Table2 className="h-4 w-4" />
               <span className="hidden sm:inline">CRUD</span>
             </TabsTrigger>
+            <TabsTrigger value="search-config" className="gap-2">
+              <Search className="h-4 w-4" />
+              <span className="hidden sm:inline">Config</span>
+            </TabsTrigger>
             <TabsTrigger value="search" className="gap-2">
               <Search className="h-4 w-4" />
               <span className="hidden sm:inline">Search</span>
+            </TabsTrigger>
+            <TabsTrigger value="geo-map" className="gap-2">
+              <Map className="h-4 w-4" />
+              <span className="hidden sm:inline">Map</span>
             </TabsTrigger>
             <TabsTrigger value="cache" className="gap-2">
               <Zap className="h-4 w-4" />
@@ -120,6 +130,10 @@ export default function Home() {
             </Card>
           </TabsContent>
 
+          <TabsContent value="search-config" className="mt-6">
+            <SearchConfigInterface />
+          </TabsContent>
+
           <TabsContent value="search" className="mt-6">
             <Card>
               <CardHeader>
@@ -132,6 +146,10 @@ export default function Home() {
                 <SearchInterface />
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="geo-map" className="mt-6">
+            <GeoMapVisualization />
           </TabsContent>
 
           <TabsContent value="cache" className="mt-6">

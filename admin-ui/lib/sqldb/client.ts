@@ -27,6 +27,8 @@ import { CacheAPI } from './types/cache';
 import { InvertedIndexManager } from './search/inverted-index-manager';
 import { SearchRanker } from './search/search-ranker';
 import { IndexStats } from './types/search';
+import { GeoSearchManager } from './search/geo-search-manager';
+import { GeoSearchTableConfig } from './types/geo-search';
 
 export class SqlDBClient {
   private config: SqlDBConfig;
@@ -211,6 +213,30 @@ export class SqlDBClient {
       );
     }
 
+    // Check if geo-search is configured for this table
+    let geoSearchManager: GeoSearchManager | undefined;
+    const geoConfig = this.config.search?.geo;
+
+    if (geoConfig?.enabled && geoConfig.tables && geoConfig.tables[tableName]) {
+      const tableConfig = geoConfig.tables[tableName];
+
+      // Map GeoConfig to GeoSearchTableConfig
+      const tableGeoConfig: GeoSearchTableConfig = {
+        latitudeField: tableConfig.latField,
+        longitudeField: tableConfig.lngField,
+        defaultRadius: {
+          value: 50,
+          unit: tableConfig.radiusUnit,
+        },
+      };
+
+      geoSearchManager = new GeoSearchManager(
+        this.redisManager,
+        tableName,
+        tableGeoConfig
+      );
+    }
+
     return new TableOperationsImpl<T>(
       tableName,
       this.dbManager,
@@ -220,7 +246,8 @@ export class SqlDBClient {
       this.config.cache as Required<typeof DEFAULT_CACHE_CONFIG>,
       this.statsTracker,
       this.indexManager,
-      this.searchRanker
+      this.searchRanker,
+      geoSearchManager
     );
   }
 

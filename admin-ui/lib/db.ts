@@ -2,6 +2,71 @@ import mariadb from 'mariadb';
 import Redis from 'ioredis';
 import { createSqlDB } from './sqldb';
 import type { CallableSqlDBClient, SqlDBConfig } from './sqldb';
+import {
+  loadConfig,
+  saveConfig,
+  updateTableConfig,
+  getTableConfig,
+  validateConfig,
+  type SqlDBConfigFile,
+  type TableSearchConfig,
+} from './sqldb/config-loader';
+
+// Global configuration (loaded from file)
+let globalConfig: SqlDBConfigFile = { tables: {} };
+
+// Search configs storage (backwards compatibility - populated from globalConfig)
+export const searchConfigs = new Map<string, TableSearchConfig>();
+
+// Load configs from file on module initialization
+try {
+  globalConfig = loadConfig();
+
+  // Populate searchConfigs Map for backwards compatibility
+  Object.entries(globalConfig.tables).forEach(([tableName, config]) => {
+    searchConfigs.set(tableName, config);
+  });
+
+  console.log(`📂 Loaded ${searchConfigs.size} table configuration(s)`);
+} catch (error) {
+  console.error('Failed to load configuration:', error);
+}
+
+/**
+ * Get the global configuration
+ */
+export function getGlobalConfig(): SqlDBConfigFile {
+  return globalConfig;
+}
+
+/**
+ * Persist search configs to disk
+ */
+export function saveConfigsToDisk(): void {
+  try {
+    // Convert Map to config object
+    const tables: { [key: string]: TableSearchConfig } = {};
+    for (const [table, config] of searchConfigs.entries()) {
+      tables[table] = config;
+    }
+
+    // Preserve defaults from global config
+    const configToSave: SqlDBConfigFile = {
+      defaults: globalConfig.defaults,
+      tables,
+    };
+
+    saveConfig(configToSave);
+
+    // Update global config
+    globalConfig = configToSave;
+
+    console.log(`💾 Saved ${searchConfigs.size} table configuration(s) to disk`);
+  } catch (error) {
+    console.error('Failed to save configuration:', error);
+    throw error;
+  }
+}
 
 // Singleton instances
 let dbInstance: CallableSqlDBClient | null = null;
@@ -32,10 +97,10 @@ export function getMariaDBPool(): mariadb.Pool {
       user,
       password: process.env.DB_PASSWORD || '',
       database,
-      connectionLimit: 10,
+      connectionLimit: parseInt(process.env.POOL_SIZE || '2', 10), // Increased from 10 to handle concurrent requests
       idleTimeout: 60000,
-      acquireTimeout: 10000,
-      connectTimeout: 10000,
+      acquireTimeout: 30000, // Increased from 10s to 30s for AWS RDS latency
+      connectTimeout: 30000, // Increased from 10s to 30s for AWS RDS latency
     };
 
     mariadbPool = mariadb.createPool(poolConfig);
@@ -86,12 +151,60 @@ export function getRedisClient(): Redis | null {
 /**
  * Initialize SqlDB instance (singleton)
  */
-export async function getDB(): Promise<CallableSqlDBClient> {
+export async function getDB(forceReinit: boolean = false): Promise<CallableSqlDBClient> {
+  // Force reinitialization if requested (e.g., after config changes)
+  if (forceReinit && dbInstance) {
+    console.log('🔄 Forcing SqlDB reinitialization with updated search configs');
+    dbInstance = null;
+  }
+
   if (dbInstance) {
     return dbInstance;
   }
 
   const redis = getRedisClient();
+
+  // Build search table configurations from saved configs
+  const searchTables: any = {};
+  const geoTables: any = {};
+
+  for (const [tableName, config] of searchConfigs.entries()) {
+    const tableConfig: any = {
+      searchableFields: config.searchableFields.map((f: any) => f.field),
+      tokenizer: config.tokenizer || 'stemming',
+      minWordLength: config.minWordLength || 3,
+      fieldBoosts: config.searchableFields.reduce((acc: any, f: any) => {
+        acc[f.field] = f.boost;
+        return acc;
+      }, {}),
+    };
+
+    // Add geo configuration if enabled (for inverted index)
+    if (config.geo?.enabled) {
+      tableConfig.geo = {
+        latitudeField: config.geo.latitudeField,
+        longitudeField: config.geo.longitudeField,
+        locationNameField: config.geo.locationNameField,
+      };
+
+      // Also add to geoTables for GeoSearchManager
+      geoTables[tableName] = {
+        latField: config.geo.latitudeField,
+        lngField: config.geo.longitudeField,
+        locationField: config.geo.locationNameField,
+        radiusUnit: 'km',
+      };
+    }
+
+    searchTables[tableName] = tableConfig;
+
+    console.log(`📋 Registering search config for table '${tableName}':`, {
+      searchableFields: tableConfig.searchableFields,
+      tokenizer: tableConfig.tokenizer,
+      fieldBoosts: tableConfig.fieldBoosts,
+      geo: tableConfig.geo ? '✓ enabled' : '✗ disabled',
+    });
+  }
 
   const config: SqlDBConfig = {
     mariadb: {
@@ -100,7 +213,9 @@ export async function getDB(): Promise<CallableSqlDBClient> {
       user: process.env.DB_USER || 'root',
       password: process.env.DB_PASSWORD || '',
       database: process.env.DB_NAME || 'test',
-      connectionLimit: 10,
+      connectionLimit: 20, // Increased from 10 to handle concurrent requests
+      acquireTimeout: 30000, // Added: 30s timeout for AWS RDS
+      connectTimeout: 30000, // Added: 30s timeout for AWS RDS
     },
     redis: {
       host: process.env.REDIS_HOST || 'localhost',
@@ -115,6 +230,17 @@ export async function getDB(): Promise<CallableSqlDBClient> {
     discovery: {
       autoDiscover: true,
     },
+    search: redis ? {
+      enabled: true,
+      invertedIndex: {
+        enabled: true,
+        tables: searchTables,
+      },
+      geo: Object.keys(geoTables).length > 0 ? {
+        enabled: true,
+        tables: geoTables,
+      } : undefined,
+    } : undefined,
   };
 
   dbInstance = await createSqlDB(config, { singleton: true });

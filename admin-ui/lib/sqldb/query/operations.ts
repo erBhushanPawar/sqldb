@@ -9,6 +9,8 @@ import { generateQueryId } from './query-tracker';
 import { SearchOptions, SearchResult, IndexStats } from '../types/search';
 import { InvertedIndexManager } from '../search/inverted-index-manager';
 import { SearchRanker } from '../search/search-ranker';
+import { GeoSearchManager } from '../search/geo-search-manager';
+import { GeoPoint, GeoDistance } from '../types/geo-search';
 
 export class TableOperationsImpl<T = any> implements TableOperations<T> {
   private tableName: string;
@@ -20,6 +22,7 @@ export class TableOperationsImpl<T = any> implements TableOperations<T> {
   private statsTracker?: QueryStatsTracker;
   private indexManager?: InvertedIndexManager;
   private searchRanker?: SearchRanker;
+  private geoSearchManager?: GeoSearchManager;
 
   constructor(
     tableName: string,
@@ -30,7 +33,8 @@ export class TableOperationsImpl<T = any> implements TableOperations<T> {
     cacheConfig: Required<CacheConfig>,
     statsTracker?: QueryStatsTracker,
     indexManager?: InvertedIndexManager,
-    searchRanker?: SearchRanker
+    searchRanker?: SearchRanker,
+    geoSearchManager?: GeoSearchManager
   ) {
     this.tableName = tableName;
     this.dbManager = dbManager;
@@ -41,6 +45,7 @@ export class TableOperationsImpl<T = any> implements TableOperations<T> {
     this.statsTracker = statsTracker;
     this.indexManager = indexManager;
     this.searchRanker = searchRanker;
+    this.geoSearchManager = geoSearchManager;
   }
 
   async findOne(where: WhereClause<T>, options?: FindOptions): Promise<T | null> {
@@ -726,6 +731,108 @@ export class TableOperationsImpl<T = any> implements TableOperations<T> {
   }
 
   /**
+   * Search with geographic filtering
+   * This method combines text search with geo-search to return only results within the specified location
+   */
+  private async searchWithGeo(query: string, options: SearchOptions): Promise<SearchResult<T>[]> {
+    if (!this.geoSearchManager) {
+      throw new Error('Geo-search is not enabled for this table');
+    }
+
+    const { geo, limit = 10, minScore = 0, highlightFields } = options;
+    if (!geo) return [];
+
+    // Step 1: Get geo-filtered document IDs from GeoSearchManager
+    let geoResults;
+
+    if (geo.locationName) {
+      // Search by location name
+      geoResults = await this.geoSearchManager.searchByLocationName(
+        geo.locationName,
+        {
+          ...geo,
+          limit: limit * 3, // Get more results for filtering
+        }
+      );
+    } else if (geo.center && geo.radius) {
+      // Search by coordinates and radius
+      geoResults = await this.geoSearchManager.searchByRadius({
+        center: geo.center,
+        radius: geo.radius,
+        maxRange: geo.maxRange,
+        minResults: geo.minResults,
+        limit: limit * 3,
+        sortByDistance: geo.sortByDistance,
+        includeDistance: true,
+      });
+    } else if (geo.bucketId) {
+      // Search by bucket
+      geoResults = await this.geoSearchManager.searchByBucket(geo.bucketId, {
+        limit: limit * 3,
+      });
+    } else {
+      return [];
+    }
+
+    if (geoResults.length === 0) {
+      return [];
+    }
+
+    // Step 2: Filter geo results by text query
+    const results: SearchResult<T>[] = [];
+
+    for (const geoResult of geoResults) {
+      const record = geoResult.document as T;
+
+      // Calculate text relevance score
+      const textScore = this.calculateSimpleScore(query, record, options.fields);
+
+      // Skip if text score is too low
+      if (textScore < minScore) {
+        continue;
+      }
+
+      // Combine text score with geo score
+      const combinedScore = (textScore * 0.7) + (geoResult.relevanceScore || 0) * 0.3;
+
+      const result: SearchResult<T> = {
+        score: combinedScore,
+        data: record,
+        matchedTerms: query.toLowerCase().split(/\s+/),
+      };
+
+      // Add distance if available
+      if (geoResult.distance) {
+        (result as any).distance = geoResult.distance;
+      }
+
+      // Add highlights if requested
+      if (highlightFields && highlightFields.length > 0) {
+        result.highlights = {};
+        const queryTerms = query.toLowerCase().split(/\s+/);
+
+        for (const field of highlightFields) {
+          const fieldValue = (record as any)[field];
+          if (fieldValue && typeof fieldValue === 'string') {
+            result.highlights[field] = this.searchRanker!.highlightText(
+              fieldValue,
+              queryTerms
+            );
+          }
+        }
+      }
+
+      results.push(result);
+    }
+
+    // Sort by combined score
+    results.sort((a, b) => (b.score || 0) - (a.score || 0));
+
+    // Return limited results
+    return results.slice(0, limit);
+  }
+
+  /**
    * Full-text search using inverted index
    * Returns ranked results with optional highlighting
    */
@@ -746,7 +853,17 @@ export class TableOperationsImpl<T = any> implements TableOperations<T> {
       ranking,
       highlightFields,
       minScore = 0,
+      geo,
     } = options || {};
+
+    // Check if this is a geo-first search that requires strict geo filtering
+    const isGeoFirst = geo?.priority === 'geo-first' || geo?.sortByDistance === true;
+    const hasGeoConstraint = geo && (geo.center || geo.locationName || geo.bucketId);
+
+    // If geo-first with geo constraints, use geo-search instead
+    if (isGeoFirst && hasGeoConstraint && this.geoSearchManager) {
+      return this.searchWithGeo(query, options);
+    }
 
     // Step 1: Search inverted index to get document IDs
     const docIds = await this.indexManager.search(this.tableName, query, limit + offset);
@@ -852,7 +969,7 @@ export class TableOperationsImpl<T = any> implements TableOperations<T> {
   /**
    * Build search index for this table from scratch
    */
-  async buildSearchIndex(): Promise<IndexStats> {
+  async buildSearchIndex(): Promise<IndexStats & { geoBuckets?: any }> {
     if (!this.indexManager) {
       throw new Error(
         `Search is not enabled for table "${this.tableName}". ` +
@@ -866,7 +983,26 @@ export class TableOperationsImpl<T = any> implements TableOperations<T> {
     // Build the index
     const stats = await this.indexManager.buildIndex(this.tableName, records as any[]);
 
-    return stats;
+    // If geo-search is enabled, automatically build geo-buckets
+    let geoBucketStats;
+    if (this.geoSearchManager) {
+      try {
+        geoBucketStats = await this.geoSearchManager.buildGeoBuckets({
+          targetBucketSize: 5,
+          gridSizeKm: 10,
+          minBucketSize: 3,
+        });
+        console.log(`✅ Geo-buckets built: ${geoBucketStats.totalBuckets} buckets created`);
+      } catch (error) {
+        console.error('Failed to build geo-buckets:', error);
+        // Don't fail the entire index build if geo-buckets fail
+      }
+    }
+
+    return {
+      ...stats,
+      geoBuckets: geoBucketStats,
+    };
   }
 
   /**
@@ -944,5 +1080,87 @@ export class TableOperationsImpl<T = any> implements TableOperations<T> {
     // For now, try common patterns
     const singularTable = this.tableName.replace(/s$/, ''); // services → service
     return `${singularTable}_id`;
+  }
+
+  /**
+   * Build geo index - index all documents with geo coordinates into Redis
+   */
+  async buildGeoIndex(): Promise<{ indexed: number }> {
+    if (!this.geoSearchManager) {
+      throw new Error(
+        `Geo-search is not enabled for table "${this.tableName}". ` +
+        'Configure geo-search in SqlDBConfig for this table.'
+      );
+    }
+
+    // Fetch all records with geo data
+    const records = await this.findMany({}, { skipCache: true });
+
+    // Filter records that have valid geo coordinates
+    const geoRecords = records.filter((record: any) => {
+      const latField = (this.geoSearchManager as any).config.latitudeField;
+      const lngField = (this.geoSearchManager as any).config.longitudeField;
+      return record[latField] != null && record[lngField] != null;
+    });
+
+    // Index all documents
+    const docs = geoRecords.map((record: any) => {
+      const latField = (this.geoSearchManager as any).config.latitudeField;
+      const lngField = (this.geoSearchManager as any).config.longitudeField;
+      const locationField = (this.geoSearchManager as any).config.locationNameField;
+
+      return {
+        id: record.id || record.service_id || record[`${this.tableName.slice(0, -1)}_id`],
+        location: {
+          lat: parseFloat(record[latField]),
+          lng: parseFloat(record[lngField]),
+        },
+        locationName: locationField ? record[locationField] : undefined,
+        data: record,
+      };
+    });
+
+    await this.geoSearchManager.indexDocuments(docs as any);
+
+    return { indexed: docs.length };
+  }
+
+  /**
+   * Build geo-buckets for this table
+   * Clusters geo data into groups for efficient geo-search
+   * Note: Requires geo index to be built first (buildGeoIndex)
+   */
+  async buildGeoBuckets(options?: {
+    targetBucketSize?: number;
+    gridSizeKm?: number;
+    minBucketSize?: number;
+  }) {
+    if (!this.geoSearchManager) {
+      throw new Error(
+        `Geo-search is not enabled for table "${this.tableName}". ` +
+        'Configure geo-search in SqlDBConfig for this table.'
+      );
+    }
+    const defaultOptions = {
+      targetBucketSize: 5,
+      gridSizeKm: 10,
+      minBucketSize: 3,
+      ...options,
+    };
+    return await this.geoSearchManager.buildGeoBuckets(defaultOptions);
+  }
+
+  /**
+   * Get pre-computed geo-buckets for this table
+   * Returns cluster information including centers, radii, and member counts
+   */
+  async getGeoBuckets() {
+    if (!this.geoSearchManager) {
+      throw new Error(
+        `Geo-search is not enabled for table "${this.tableName}". ` +
+        'Configure geo-search in SqlDBConfig for this table.'
+      );
+    }
+    return await this.geoSearchManager.getGeoBuckets();
   }
 }
