@@ -398,7 +398,7 @@ export class GeoSearchManager {
     for (const memberId of allMembers) {
       pipeline.geopos(mainGeoKey, memberId);
     }
-    const positions = await pipeline.exec();
+    const positions = await pipeline.exec() as Array<[Error | null, any]>;
 
     // 3. Build document records
     const records: Array<{
@@ -409,10 +409,10 @@ export class GeoSearchManager {
     }> = [];
 
     for (let i = 0; i < allMembers.length; i++) {
-      const posResult = positions![i][1];
+      const posResult = positions[i][1];
 
       // GEOPOS returns an array with [longitude, latitude] as the first element
-      const pos = posResult ? posResult[0] : null;
+      const pos = posResult ? (posResult[0] as any) : null;
 
       if (!pos || !Array.isArray(pos) || pos.length !== 2) {
         console.warn(`No valid position data for member ${allMembers[i]}, got:`, posResult);

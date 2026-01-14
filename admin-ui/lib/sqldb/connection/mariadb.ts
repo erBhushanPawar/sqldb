@@ -1,7 +1,8 @@
 import * as mariadb from 'mariadb';
-import { MariaDBConfig } from '../types/config';
+import { MariaDBConfig, CaseConversionConfig } from '../types/config';
 import { QueryTracker, QueryMetadata } from '../types/query';
 import { generateQueryId } from '../query/query-tracker';
+import { CaseConverter } from '../utils/case-converter';
 
 type QueryType = 'SELECT' | 'INSERT' | 'UPDATE' | 'DELETE' | 'CREATE' | 'ALTER' | 'DROP' | 'OTHER';
 
@@ -44,10 +45,12 @@ export class MariaDBConnectionManager {
   private config: MariaDBConfig;
   private queryTracker?: QueryTracker;
   private enableQueryLogging: boolean = false;
+  private caseConversionConfig?: CaseConversionConfig;
 
-  constructor(config: MariaDBConfig, queryTracker?: QueryTracker) {
+  constructor(config: MariaDBConfig, queryTracker?: QueryTracker, caseConversionConfig?: CaseConversionConfig) {
     this.config = config;
     this.queryTracker = queryTracker;
+    this.caseConversionConfig = caseConversionConfig;
     // Enable query logging if logging is configured
     this.enableQueryLogging = !!(config as any).logging;
   }
@@ -235,7 +238,14 @@ export class MariaDBConnectionManager {
       );
 
       // Convert BigInt values to Numbers to prevent downstream errors
-      return convertBigIntToNumber(result) as T;
+      let processedResult = convertBigIntToNumber(result) as T;
+
+      // Apply case conversion if enabled (database -> application)
+      if (this.caseConversionConfig?.enabled && queryType === 'SELECT') {
+        processedResult = CaseConverter.objectKeysToCamel(processedResult);
+      }
+
+      return processedResult;
     } catch (error) {
       const endTime = Date.now();
       const executionTimeMs = endTime - startTime;

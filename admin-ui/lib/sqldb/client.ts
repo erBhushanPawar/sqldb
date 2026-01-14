@@ -5,6 +5,7 @@ import {
   DEFAULT_LOGGING_CONFIG,
   DEFAULT_WARMING_CONFIG,
   DEFAULT_SEARCH_CONFIG,
+  DEFAULT_CASE_CONVERSION_CONFIG,
 } from './types/config';
 import { TableOperations, QueryMetadata } from './types/query';
 import { TableSchema } from './types/schema';
@@ -63,6 +64,7 @@ export class SqlDBClient {
       logging: { ...DEFAULT_LOGGING_CONFIG, ...config.logging },
       warming: { ...DEFAULT_WARMING_CONFIG, ...config.warming },
       search: { ...DEFAULT_SEARCH_CONFIG, ...config.search },
+      caseConversion: { ...DEFAULT_CASE_CONVERSION_CONFIG, ...config.caseConversion },
     };
     this.queryTracker = new InMemoryQueryTracker();
   }
@@ -75,7 +77,7 @@ export class SqlDBClient {
     this.log('info', 'Initializing SqlDBClient...');
 
     // Initialize connection managers
-    this.dbManager = new MariaDBConnectionManager(this.config.mariadb, this.queryTracker);
+    this.dbManager = new MariaDBConnectionManager(this.config.mariadb, this.queryTracker, this.config.caseConversion);
     await this.dbManager.connect();
     this.log('info', 'MariaDB connected');
 
@@ -84,7 +86,7 @@ export class SqlDBClient {
     this.log('info', 'Redis connected');
 
     // Initialize core components
-    this.queryBuilder = new QueryBuilder();
+    this.queryBuilder = new QueryBuilder(this.config.caseConversion);
     this.dependencyGraph = new DependencyGraph(
       this.config.discovery!.maxGraphDepth
     );
@@ -247,7 +249,8 @@ export class SqlDBClient {
       this.statsTracker,
       this.indexManager,
       this.searchRanker,
-      geoSearchManager
+      geoSearchManager,
+      this.config.caseConversion
     );
   }
 

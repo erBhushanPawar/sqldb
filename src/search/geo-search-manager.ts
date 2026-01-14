@@ -409,7 +409,7 @@ export class GeoSearchManager {
     }> = [];
 
     for (let i = 0; i < allMembers.length; i++) {
-      const posResult = positions![i][1];
+      const posResult = positions![i][1] as any;
 
       // GEOPOS returns an array with [longitude, latitude] as the first element
       const pos = posResult ? posResult[0] : null;

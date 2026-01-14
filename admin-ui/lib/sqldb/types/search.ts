@@ -81,7 +81,7 @@ export interface SearchOptions {
   fields?: string[];                   // Limit to specific fields
   limit?: number;                      // Max results (default: 10)
   offset?: number;                     // Pagination offset
-  filters?: Record<string, any>;       // Additional SQL WHERE filters
+  filters?: Record<string, any>;       // Additional SQL WHERE filters (can be SearchFilterModel)
   ranking?: {
     fieldBoosts?: Record<string, number>;      // Override field boosts
     proximityWeight?: number;                  // Weight for word proximity
@@ -89,6 +89,23 @@ export interface SearchOptions {
   highlightFields?: string[];          // Return highlighted snippets
   fuzzy?: boolean;                     // Enable fuzzy matching (typo tolerance)
   minScore?: number;                   // Minimum relevance score (0-1)
+  geo?: GeoSearchFilter;               // Geo-spatial search options
+}
+
+/**
+ * Geo-Spatial Search Filter
+ */
+export interface GeoSearchFilter {
+  center?: GeoPoint;                   // Search center coordinates
+  radius?: number;                     // Search radius (in km or miles)
+  maxRange?: number;                   // Maximum radius to expand to if needed
+  minResults?: number;                 // Minimum results to return (expands radius if needed)
+  sortByDistance?: boolean;            // Sort results by distance from center
+  includeDistance?: boolean;           // Include distance in results
+  locationName?: string;               // Search by location name instead of coordinates
+  bucketId?: string;                   // Search within a specific geo-bucket
+  priority?: 'geo-first' | 'text-first'; // Which search to prioritize (default: text-first)
+  unit?: 'km' | 'mi';                  // Distance unit (default: km)
 }
 
 /**

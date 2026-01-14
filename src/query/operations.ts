@@ -3,7 +3,7 @@ import { CacheManager } from '../cache/cache-manager';
 import { InvalidationManager } from '../cache/invalidation';
 import { QueryBuilder } from './query-builder';
 import { TableOperations, WhereClause, FindOptions, RelationConfig } from '../types/query';
-import { CacheConfig } from '../types/config';
+import { CacheConfig, CaseConversionConfig } from '../types/config';
 import { QueryStatsTracker } from '../warming/query-stats-tracker';
 import { generateQueryId } from './query-tracker';
 import { SearchOptions, SearchResult, IndexStats } from '../types/search';
@@ -11,6 +11,7 @@ import { InvertedIndexManager } from '../search/inverted-index-manager';
 import { SearchRanker } from '../search/search-ranker';
 import { GeoSearchManager } from '../search/geo-search-manager';
 import { GeoPoint, GeoDistance } from '../types/geo-search';
+import { CaseConverter } from '../utils/case-converter';
 
 export class TableOperationsImpl<T = any> implements TableOperations<T> {
   private tableName: string;
@@ -23,6 +24,7 @@ export class TableOperationsImpl<T = any> implements TableOperations<T> {
   private indexManager?: InvertedIndexManager;
   private searchRanker?: SearchRanker;
   private geoSearchManager?: GeoSearchManager;
+  private caseConversionConfig?: CaseConversionConfig;
 
   constructor(
     tableName: string,
@@ -34,7 +36,8 @@ export class TableOperationsImpl<T = any> implements TableOperations<T> {
     statsTracker?: QueryStatsTracker,
     indexManager?: InvertedIndexManager,
     searchRanker?: SearchRanker,
-    geoSearchManager?: GeoSearchManager
+    geoSearchManager?: GeoSearchManager,
+    caseConversionConfig?: CaseConversionConfig
   ) {
     this.tableName = tableName;
     this.dbManager = dbManager;
@@ -46,6 +49,7 @@ export class TableOperationsImpl<T = any> implements TableOperations<T> {
     this.indexManager = indexManager;
     this.searchRanker = searchRanker;
     this.geoSearchManager = geoSearchManager;
+    this.caseConversionConfig = caseConversionConfig;
   }
 
   async findOne(where: WhereClause<T>, options?: FindOptions): Promise<T | null> {
@@ -781,12 +785,22 @@ export class TableOperationsImpl<T = any> implements TableOperations<T> {
       ? [...idsToFetch, ...Object.values(filters), limit]
       : [...idsToFetch, limit];
 
-    const records = await this.raw<T[]>(sql, params);
+    let records = await this.raw<T[]>(sql, params);
+
+    // Apply case conversion if enabled (database -> application)
+    if (this.caseConversionConfig?.enabled) {
+      records = CaseConverter.objectKeysToCamel(records);
+    }
+
+    // Determine the field name to use for lookup (convert to camelCase if needed)
+    const lookupField = this.caseConversionConfig?.enabled
+      ? CaseConverter.snakeToCamel(idField)
+      : idField;
 
     // Create a map for quick lookup (ID as string to support UUIDs)
     const recordsMap = new Map<string, T>();
     for (const record of records) {
-      const id = (record as any)[idField];
+      const id = (record as any)[lookupField];
       if (id !== undefined && id !== null) {
         recordsMap.set(String(id), record);
       }

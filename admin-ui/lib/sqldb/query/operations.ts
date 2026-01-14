@@ -3,7 +3,7 @@ import { CacheManager } from '../cache/cache-manager';
 import { InvalidationManager } from '../cache/invalidation';
 import { QueryBuilder } from './query-builder';
 import { TableOperations, WhereClause, FindOptions, RelationConfig } from '../types/query';
-import { CacheConfig } from '../types/config';
+import { CacheConfig, CaseConversionConfig } from '../types/config';
 import { QueryStatsTracker } from '../warming/query-stats-tracker';
 import { generateQueryId } from './query-tracker';
 import { SearchOptions, SearchResult, IndexStats } from '../types/search';
@@ -11,6 +11,7 @@ import { InvertedIndexManager } from '../search/inverted-index-manager';
 import { SearchRanker } from '../search/search-ranker';
 import { GeoSearchManager } from '../search/geo-search-manager';
 import { GeoPoint, GeoDistance } from '../types/geo-search';
+import { CaseConverter } from '../utils/case-converter';
 
 export class TableOperationsImpl<T = any> implements TableOperations<T> {
   private tableName: string;
@@ -23,6 +24,7 @@ export class TableOperationsImpl<T = any> implements TableOperations<T> {
   private indexManager?: InvertedIndexManager;
   private searchRanker?: SearchRanker;
   private geoSearchManager?: GeoSearchManager;
+  private caseConversionConfig?: CaseConversionConfig;
 
   constructor(
     tableName: string,
@@ -34,7 +36,8 @@ export class TableOperationsImpl<T = any> implements TableOperations<T> {
     statsTracker?: QueryStatsTracker,
     indexManager?: InvertedIndexManager,
     searchRanker?: SearchRanker,
-    geoSearchManager?: GeoSearchManager
+    geoSearchManager?: GeoSearchManager,
+    caseConversionConfig?: CaseConversionConfig
   ) {
     this.tableName = tableName;
     this.dbManager = dbManager;
@@ -46,6 +49,7 @@ export class TableOperationsImpl<T = any> implements TableOperations<T> {
     this.indexManager = indexManager;
     this.searchRanker = searchRanker;
     this.geoSearchManager = geoSearchManager;
+    this.caseConversionConfig = caseConversionConfig;
   }
 
   async findOne(where: WhereClause<T>, options?: FindOptions): Promise<T | null> {
@@ -542,7 +546,12 @@ export class TableOperationsImpl<T = any> implements TableOperations<T> {
             this.cacheManager,
             this.invalidationManager,
             this.queryBuilder,
-            this.cacheConfig
+            this.cacheConfig,
+            this.statsTracker,
+            this.indexManager,
+            this.searchRanker,
+            this.geoSearchManager,
+            this.caseConversionConfig
           );
 
           // Group records by their PK value and fetch related data for each
@@ -579,7 +588,12 @@ export class TableOperationsImpl<T = any> implements TableOperations<T> {
             this.cacheManager,
             this.invalidationManager,
             this.queryBuilder,
-            this.cacheConfig
+            this.cacheConfig,
+            this.statsTracker,
+            this.indexManager,
+            this.searchRanker,
+            this.geoSearchManager,
+            this.caseConversionConfig
           );
 
           // Collect all unique FK values
@@ -668,7 +682,12 @@ export class TableOperationsImpl<T = any> implements TableOperations<T> {
             this.cacheManager,
             this.invalidationManager,
             this.queryBuilder,
-            this.cacheConfig
+            this.cacheConfig,
+            this.statsTracker,
+            this.indexManager,
+            this.searchRanker,
+            this.geoSearchManager,
+            this.caseConversionConfig
           );
 
           // Warm general query first
@@ -702,7 +721,12 @@ export class TableOperationsImpl<T = any> implements TableOperations<T> {
             this.cacheManager,
             this.invalidationManager,
             this.queryBuilder,
-            this.cacheConfig
+            this.cacheConfig,
+            this.statsTracker,
+            this.indexManager,
+            this.searchRanker,
+            this.geoSearchManager,
+            this.caseConversionConfig
           );
 
           // Warm general query
@@ -782,7 +806,12 @@ export class TableOperationsImpl<T = any> implements TableOperations<T> {
     const results: SearchResult<T>[] = [];
 
     for (const geoResult of geoResults) {
-      const record = geoResult.document as T;
+      let record = geoResult.document as T;
+
+      // Apply case conversion if enabled (database -> application)
+      if (this.caseConversionConfig?.enabled) {
+        record = CaseConverter.objectKeysToCamel(record);
+      }
 
       // Calculate text relevance score
       const textScore = this.calculateSimpleScore(query, record, options.fields);
@@ -833,8 +862,12 @@ export class TableOperationsImpl<T = any> implements TableOperations<T> {
   }
 
   /**
-   * Full-text search using inverted index
+   * Full-text search using inverted index with advanced filtering
    * Returns ranked results with optional highlighting
+   *
+   * @param query - Text query string for full-text search
+   * @param options - Search options including filters, geo, pagination, etc.
+   *                  Can accept a SearchFilterModel in the filters field for advanced filtering
    */
   async search(query: string, options?: SearchOptions): Promise<SearchResult<T>[]> {
     if (!this.indexManager || !this.searchRanker) {
@@ -845,7 +878,7 @@ export class TableOperationsImpl<T = any> implements TableOperations<T> {
     }
 
     const startTime = Date.now();
-    const {
+    let {
       fields,
       limit = 10,
       offset = 0,
@@ -856,13 +889,39 @@ export class TableOperationsImpl<T = any> implements TableOperations<T> {
       geo,
     } = options || {};
 
+    // Extract geo-location from SearchFilterModel if present
+    if (filters && typeof filters === 'object' &&
+        ('andFilter' in filters || 'likeFilter' in filters || 'orFilter' in filters)) {
+      const filterModel = filters as any;
+
+      // Extract geo coordinates from andFilter if present
+      if (filterModel.andFilter?.latitude !== undefined && filterModel.andFilter?.longitude !== undefined) {
+        const lat = Number(filterModel.andFilter.latitude);
+        const lng = Number(filterModel.andFilter.longitude);
+
+        // Auto-populate geo options if not already set
+        if (!geo && !isNaN(lat) && !isNaN(lng)) {
+          geo = {
+            center: { lat, lng },
+            radius: 25, // Default 25km radius
+            sortByDistance: true,
+            includeDistance: true
+          };
+        }
+
+        // Remove lat/lng from andFilter to avoid SQL errors
+        delete filterModel.andFilter.latitude;
+        delete filterModel.andFilter.longitude;
+      }
+    }
+
     // Check if this is a geo-first search that requires strict geo filtering
     const isGeoFirst = geo?.priority === 'geo-first' || geo?.sortByDistance === true;
     const hasGeoConstraint = geo && (geo.center || geo.locationName || geo.bucketId);
 
     // If geo-first with geo constraints, use geo-search instead
     if (isGeoFirst && hasGeoConstraint && this.geoSearchManager) {
-      return this.searchWithGeo(query, options);
+      return this.searchWithGeo(query, { ...options, geo });
     }
 
     // Step 1: Search inverted index to get document IDs
@@ -882,23 +941,25 @@ export class TableOperationsImpl<T = any> implements TableOperations<T> {
     // Detect the ID field name (id, service_id, etc.)
     const idField = this.detectIdField();
 
-    // Build SQL IN clause manually since query builder doesn't support $in
-    const placeholders = idsToFetch.map(() => '?').join(',');
-    const whereFilters = filters ? Object.entries(filters).map(([key, val]) => `${key} = ?`).join(' AND ') : '';
-    const sql = whereFilters
-      ? `SELECT * FROM ${this.tableName} WHERE ${idField} IN (${placeholders}) AND ${whereFilters} LIMIT ?`
-      : `SELECT * FROM ${this.tableName} WHERE ${idField} IN (${placeholders}) LIMIT ?`;
+    // Build SQL query with advanced filtering support
+    const { sql, params } = this.buildSearchQuery(idField, idsToFetch, filters, limit);
 
-    const params = filters
-      ? [...idsToFetch, ...Object.values(filters), limit]
-      : [...idsToFetch, limit];
+    let records = await this.raw<T[]>(sql, params);
 
-    const records = await this.raw<T[]>(sql, params);
+    // Apply case conversion if enabled (database -> application)
+    if (this.caseConversionConfig?.enabled) {
+      records = CaseConverter.objectKeysToCamel(records);
+    }
+
+    // Determine the field name to use for lookup (convert to camelCase if needed)
+    const lookupField = this.caseConversionConfig?.enabled
+      ? CaseConverter.snakeToCamel(idField)
+      : idField;
 
     // Create a map for quick lookup (ID as string to support UUIDs)
     const recordsMap = new Map<string, T>();
     for (const record of records) {
-      const id = (record as any)[idField];
+      const id = (record as any)[lookupField];
       if (id !== undefined && id !== null) {
         recordsMap.set(String(id), record);
       }
@@ -964,6 +1025,129 @@ export class TableOperationsImpl<T = any> implements TableOperations<T> {
     }
 
     return results;
+  }
+
+  /**
+   * Build advanced search query with support for SearchFilterModel
+   * Supports: andFilter, orFilter, likeFilter, wildcardQueryString, Between ranges
+   */
+  private buildSearchQuery(
+    idField: string,
+    idsToFetch: string[],
+    filters: any,
+    limit: number
+  ): { sql: string; params: any[] } {
+    const placeholders = idsToFetch.map(() => '?').join(',');
+    let sql = `SELECT * FROM ${this.tableName} WHERE ${idField} IN (${placeholders})`;
+    const params: any[] = [...idsToFetch];
+
+    // Check if filters contains a SearchFilterModel with builtWhereClause
+    if (filters && typeof filters === 'object') {
+      const hasBuiltWhereClause = filters.builtWhereClause !== undefined;
+      const hasAndFilter = filters.andFilter && Object.keys(filters.andFilter).length > 0;
+      const hasOrFilter = filters.orFilter && Array.isArray(filters.orFilter) && filters.orFilter.length > 0;
+      const hasLikeFilter = filters.likeFilter && Object.keys(filters.likeFilter).length > 0;
+
+      if (hasBuiltWhereClause || hasAndFilter || hasOrFilter || hasLikeFilter) {
+        // Advanced filtering using SearchFilterModel structure
+        const conditions: string[] = [];
+
+        // Handle andFilter (exact matches and complex conditions)
+        if (hasAndFilter) {
+          for (const [key, value] of Object.entries(filters.andFilter)) {
+            if (value !== null && value !== undefined) {
+              // Check if it's a TypeORM Like operator result
+              if (typeof value === 'object' && '_type' in value && (value as any)._type === 'find-operator') {
+                conditions.push(`${key} LIKE ?`);
+                params.push((value as any)._value);
+              }
+              // Check if it's a Between operator result
+              else if (typeof value === 'object' && '_type' in value && (value as any)._type === 'between') {
+                conditions.push(`${key} BETWEEN ? AND ?`);
+                params.push((value as any)._value[0], (value as any)._value[1]);
+              }
+              // Check for minimum/maximum range object
+              else if (typeof value === 'object' && ('minimum' in value || 'maximum' in value)) {
+                const rangeValue = value as any;
+                if (rangeValue.minimum !== undefined && rangeValue.maximum !== undefined) {
+                  conditions.push(`${key} BETWEEN ? AND ?`);
+                  params.push(rangeValue.minimum, rangeValue.maximum);
+                } else if (rangeValue.minimum !== undefined) {
+                  conditions.push(`${key} >= ?`);
+                  params.push(rangeValue.minimum);
+                } else if (rangeValue.maximum !== undefined) {
+                  conditions.push(`${key} <= ?`);
+                  params.push(rangeValue.maximum);
+                }
+              }
+              // Simple equality
+              else {
+                conditions.push(`${key} = ?`);
+                params.push(value);
+              }
+            }
+          }
+        }
+
+        // Handle likeFilter (partial matches with LIKE)
+        if (hasLikeFilter) {
+          for (const [key, value] of Object.entries(filters.likeFilter)) {
+            if (value !== null && value !== undefined) {
+              conditions.push(`${key} LIKE ?`);
+              // Add wildcards if not already present
+              const likeValue = String(value);
+              params.push(likeValue.includes('%') ? likeValue : `%${likeValue}%`);
+            }
+          }
+        }
+
+        // Handle orFilter (multiple OR conditions)
+        if (hasOrFilter) {
+          const orConditions: string[] = [];
+          for (const orItem of filters.orFilter) {
+            if (orItem && typeof orItem === 'object') {
+              for (const [key, value] of Object.entries(orItem)) {
+                if (value !== null && value !== undefined) {
+                  // Check if it's a TypeORM Like operator
+                  if (typeof value === 'object' && '_type' in value && (value as any)._type === 'find-operator') {
+                    orConditions.push(`${key} LIKE ?`);
+                    params.push((value as any)._value);
+                  } else {
+                    orConditions.push(`${key} = ?`);
+                    params.push(value);
+                  }
+                }
+              }
+            }
+          }
+          if (orConditions.length > 0) {
+            conditions.push(`(${orConditions.join(' OR ')})`);
+          }
+        }
+
+        // Combine all conditions with AND
+        if (conditions.length > 0) {
+          sql += ` AND (${conditions.join(' AND ')})`;
+        }
+      } else {
+        // Simple key-value filters (backwards compatibility)
+        const whereFilters = Object.entries(filters)
+          .filter(([key]) => !['builtWhereClause', 'page', 'limit', 'skip', 'orderBy', 'order', 'selectFields', 'groupByField', 'wildcardQueryString', 'wildCardMatchWithFields', 'metadata', 'requestedCurrencyCode'].includes(key))
+          .map(([key]) => `${key} = ?`);
+
+        if (whereFilters.length > 0) {
+          sql += ` AND ${whereFilters.join(' AND ')}`;
+          params.push(...Object.entries(filters)
+            .filter(([key]) => !['builtWhereClause', 'page', 'limit', 'skip', 'orderBy', 'order', 'selectFields', 'groupByField', 'wildcardQueryString', 'wildCardMatchWithFields', 'metadata', 'requestedCurrencyCode'].includes(key))
+            .map(([, val]) => val));
+        }
+      }
+    }
+
+    sql += ` LIMIT ?`;
+    params.push(limit);
+
+    return { sql, params };
   }
 
   /**

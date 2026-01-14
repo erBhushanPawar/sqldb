@@ -179,6 +179,42 @@ export class MariaDBConnectionManager {
       ...this.config,
       port: this.config.port || 3306,
       connectionLimit: this.config.connectionLimit || 10,
+      // Automatically convert types
+      typeCast: (field: any, next: any) => {
+        // Convert TINYINT(1) to boolean
+        if (field.type === 'TINY' && field.columnLength === 1) {
+          const value = field.int();
+          return value === null ? null : value === 1;
+        }
+
+        // Try to parse JSON from TEXT/VARCHAR fields
+        if (field.type === 'VAR_STRING' || field.type === 'STRING' ||
+            field.type === 'BLOB' || field.type === 'TINY_BLOB' ||
+            field.type === 'MEDIUM_BLOB' || field.type === 'LONG_BLOB') {
+          const value = field.string();
+
+          if (value === null || value === '') {
+            return value;
+          }
+
+          // Check if it looks like JSON (starts with [ or {)
+          const trimmed = value.trim();
+          if ((trimmed.startsWith('[') && trimmed.endsWith(']')) ||
+              (trimmed.startsWith('{') && trimmed.endsWith('}'))) {
+            try {
+              return JSON.parse(value);
+            } catch (e) {
+              // If parsing fails, return the original string
+              return value;
+            }
+          }
+
+          return value;
+        }
+
+        // Use default type casting for other types
+        return next();
+      }
     });
 
     return this.pool;

@@ -247,7 +247,8 @@ export class SqlDBClient {
       this.statsTracker,
       this.indexManager,
       this.searchRanker,
-      geoSearchManager
+      geoSearchManager,
+      this.config.caseConversion
     );
   }
 
