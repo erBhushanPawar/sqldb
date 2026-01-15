@@ -1,6 +1,19 @@
-export type WhereClause<T = any> = Partial<T> & {
+import { WhereInput } from './operators';
+
+/**
+ * WhereClause type with full Prisma-style operator support
+ *
+ * Supports:
+ * - Simple equality: { age: 25 }
+ * - Operators: { age: { gte: 18, lte: 65 } }
+ * - Arrays (legacy IN): { status: ['active', 'pending'] }
+ * - Logical operators: { OR: [...], AND: [...], NOT: [...] }
+ * - String operators: { email: { contains: '@example.com', mode: 'insensitive' } }
+ * - Null checks: { deletedAt: null } or { deletedAt: { isNull: true } }
+ */
+export type WhereClause<T = any> = WhereInput<T> | (Partial<T> & {
   [key: string]: any;
-};
+});
 
 export interface OrderByOption {
   column: string;

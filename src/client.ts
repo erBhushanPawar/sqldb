@@ -75,7 +75,11 @@ export class SqlDBClient {
     this.log('info', 'Initializing SqlDBClient...');
 
     // Initialize connection managers
-    this.dbManager = new MariaDBConnectionManager(this.config.mariadb, this.queryTracker);
+    this.dbManager = new MariaDBConnectionManager(
+      this.config.mariadb,
+      this.queryTracker,
+      this.config.logging
+    );
     await this.dbManager.connect();
     this.log('info', 'MariaDB connected');
 
@@ -502,8 +506,20 @@ export class SqlDBClient {
   }
 
   private log(level: string, message: string, meta?: any): void {
-    if (this.config.logging?.logger) {
-      this.config.logging.logger(level, message, meta);
+    if (!this.config.logging?.logger) return;
+
+    const logger = this.config.logging.logger;
+
+    // Check if logger is a function
+    if (typeof logger === 'function') {
+      logger(level, message, meta);
+    }
+    // Check if logger is an instance with methods
+    else if (typeof logger === 'object') {
+      const method = logger[level as keyof typeof logger];
+      if (method && typeof method === 'function') {
+        method.call(logger, message, meta);
+      }
     }
   }
 }

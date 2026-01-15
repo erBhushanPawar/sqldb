@@ -1,4 +1,6 @@
 import { WhereClause, FindOptions, QueryResult, OrderByOption } from '../types/query';
+import { isOperatorObject, isLogicalOperator } from '../types/operators';
+import { fieldOperators, logicalOperators, getStringOperators, isKnownOperator } from './operators';
 
 export class QueryBuilder {
   buildSelect(
@@ -132,21 +134,108 @@ export class QueryBuilder {
     const conditions: string[] = [];
 
     for (const [key, value] of Object.entries(where)) {
+      // Handle logical operators (AND, OR, NOT)
+      if (isLogicalOperator(key)) {
+        const logicalFn = logicalOperators[key];
+        const clause = logicalFn(value, this.buildWhereClause.bind(this), params);
+        if (clause) {
+          conditions.push(clause);
+        }
+        continue;
+      }
+
+      // Handle undefined - skip
+      if (value === undefined) {
+        continue;
+      }
+
+      // Handle null - direct IS NULL check
       if (value === null) {
         conditions.push(`${key} IS NULL`);
-      } else if (value === undefined) {
-        // Skip undefined values
         continue;
-      } else if (Array.isArray(value)) {
-        // IN clause
-        const placeholders = value.map(() => '?').join(', ');
-        conditions.push(`${key} IN (${placeholders})`);
-        params.push(...value);
-      } else if (typeof value === 'object' && value !== null) {
-        // Handle operators like { $gt: 5 }, { $like: '%test%' }
+      }
+
+      // Handle Date objects - treat as equality
+      if (value instanceof Date) {
+        conditions.push(`${key} = ?`);
+        params.push(value);
+        continue;
+      }
+
+      // Handle arrays - backward compatible IN clause (with deprecation path)
+      if (Array.isArray(value)) {
+        // Legacy array syntax: { age: [18, 21, 25] } -> age IN (18, 21, 25)
+        // Still supported for backward compatibility
+        if (value.length === 0) {
+          conditions.push('1 = 0'); // Empty array = no match
+        } else {
+          const placeholders = value.map(() => '?').join(', ');
+          conditions.push(`${key} IN (${placeholders})`);
+          params.push(...value);
+        }
+        continue;
+      }
+
+      // Handle operator objects: { age: { gte: 18, lte: 65 } }
+      if (isOperatorObject(value)) {
+        const operatorConditions: string[] = [];
+        let caseInsensitive = false;
+
+        // Check for mode option (for string operators)
+        if (value.mode === 'insensitive') {
+          caseInsensitive = true;
+        }
+
+        // Get appropriate string operators based on mode
+        const stringOps = caseInsensitive ? getStringOperators('insensitive') : getStringOperators('default');
+
+        // Process each operator in the object
+        for (const [operator, operatorValue] of Object.entries(value)) {
+          // Skip mode as it's a modifier, not an operator
+          if (operator === 'mode') {
+            continue;
+          }
+
+          // Check if it's a known operator
+          if (isKnownOperator(operator)) {
+            // Use string operators if available and case-insensitive mode is set
+            if (operator in stringOps && caseInsensitive) {
+              const processor = stringOps[operator as keyof typeof stringOps];
+              const condition = processor.buildCondition(key, operatorValue, params);
+              operatorConditions.push(condition);
+            } else if (operator in fieldOperators) {
+              const processor = fieldOperators[operator];
+              const condition = processor.buildCondition(key, operatorValue, params);
+              operatorConditions.push(condition);
+            } else {
+              // Logical operators shouldn't appear here, but handle gracefully
+              console.warn(`Unexpected operator '${operator}' in field context`);
+            }
+          } else {
+            // Unknown operator - treat the whole object as a value (backward compatibility)
+            conditions.push(`${key} = ?`);
+            params.push(value);
+            break;
+          }
+        }
+
+        if (operatorConditions.length > 0) {
+          // Multiple operators on same field are AND'd together
+          if (operatorConditions.length === 1) {
+            conditions.push(operatorConditions[0]);
+          } else {
+            conditions.push(`(${operatorConditions.join(' AND ')})`);
+          }
+        }
+        continue;
+      }
+
+      // Handle legacy $ operators for backward compatibility
+      if (typeof value === 'object' && value !== null) {
         const operator = Object.keys(value)[0];
         const operatorValue = value[operator];
 
+        // Legacy operators: $gt, $gte, $lt, $lte, $ne, $like
         switch (operator) {
           case '$gt':
             conditions.push(`${key} > ?`);
@@ -173,14 +262,16 @@ export class QueryBuilder {
             params.push(operatorValue);
             break;
           default:
-            // Treat as equality
+            // Not a legacy operator - treat as equality with object value
             conditions.push(`${key} = ?`);
             params.push(value);
         }
-      } else {
-        conditions.push(`${key} = ?`);
-        params.push(value);
+        continue;
       }
+
+      // Default: simple equality
+      conditions.push(`${key} = ?`);
+      params.push(value);
     }
 
     return conditions.join(' AND ');

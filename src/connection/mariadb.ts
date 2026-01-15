@@ -1,5 +1,5 @@
 import * as mariadb from 'mariadb';
-import { MariaDBConfig } from '../types/config';
+import { MariaDBConfig, LoggingConfig } from '../types/config';
 import { QueryTracker, QueryMetadata } from '../types/query';
 import { generateQueryId } from '../query/query-tracker';
 
@@ -43,13 +43,12 @@ export class MariaDBConnectionManager {
   private pool: mariadb.Pool | null = null;
   private config: MariaDBConfig;
   private queryTracker?: QueryTracker;
-  private enableQueryLogging: boolean = false;
+  private loggingConfig?: LoggingConfig;
 
-  constructor(config: MariaDBConfig, queryTracker?: QueryTracker) {
+  constructor(config: MariaDBConfig, queryTracker?: QueryTracker, loggingConfig?: LoggingConfig) {
     this.config = config;
     this.queryTracker = queryTracker;
-    // Enable query logging if logging is configured
-    this.enableQueryLogging = !!(config as any).logging;
+    this.loggingConfig = loggingConfig;
   }
 
   setQueryTracker(tracker: QueryTracker): void {
@@ -135,6 +134,28 @@ export class MariaDBConnectionManager {
   }
 
   /**
+   * Helper to call logger (supports both function and instance)
+   */
+  private callLogger(level: 'info' | 'error' | 'warn' | 'debug', message: string, meta?: any): void {
+    if (!this.loggingConfig?.logger) return;
+
+    const logger = this.loggingConfig.logger;
+
+    // Check if logger is a function
+    if (typeof logger === 'function') {
+      logger(level, message, meta);
+    }
+    // Check if logger is an instance with methods
+    else if (typeof logger === 'object') {
+      const method = logger[level];
+      if (method) {
+        // Call logger method: logger.info(message, meta)
+        method.call(logger, message, meta);
+      }
+    }
+  }
+
+  /**
    * Log query execution with nice formatting
    */
   private logQuery(
@@ -143,30 +164,33 @@ export class MariaDBConnectionManager {
     sql: string,
     executionTimeMs: number,
     resultCount: number,
+    correlationId?: string,
     error?: string
   ): void {
-    if (!this.enableQueryLogging) return;
+    if (!this.loggingConfig || this.loggingConfig.level === 'none') return;
 
     const emoji = error ? '❌' : this.getPerformanceEmoji(executionTimeMs);
     const table = tableName || 'unknown';
     const formattedSql = this.formatSqlForLogging(sql, 100 * 10);
-    const timestamp = new Date().toISOString();
 
     if (error) {
-      console.log(
-        `[${timestamp}] ${emoji} ${queryType} on ${table} - FAILED after ${executionTimeMs}ms`
-      );
-      console.log(`   SQL: ${formattedSql}`);
-      console.log(`   Error: ${error}`);
+      const message = `${emoji} Query Result: | "${formattedSql}" | FAILED after ${executionTimeMs}ms | ${error}`;
+      this.callLogger('error', message, {
+        correlationId,
+        queryType,
+        tableName: table,
+        executionTimeMs,
+        error
+      });
     } else {
-      const resultsText = queryType === 'SELECT' ? `${resultCount} rows` : `${resultCount} affected`;
-      console.log(
-        `[${timestamp}] ${emoji} ${queryType} on ${table} - ${executionTimeMs}ms - ${resultsText}`
-      );
-
-      if (executionTimeMs > 200) {
-        console.log(`   SQL: ${formattedSql}`);
-      }
+      const message = `${emoji} Query Result: | "${formattedSql}" | ${resultCount} | {}`;
+      this.callLogger('info', message, {
+        correlationId,
+        queryType,
+        tableName: table,
+        executionTimeMs,
+        resultCount
+      });
     }
   }
 
@@ -267,7 +291,8 @@ export class MariaDBConnectionManager {
         tableName,
         sql,
         executionTimeMs,
-        metadata.resultCount
+        metadata.resultCount,
+        correlationId || queryId
       );
 
       // Convert BigInt values to Numbers to prevent downstream errors
@@ -292,6 +317,7 @@ export class MariaDBConnectionManager {
         sql,
         executionTimeMs,
         0,
+        correlationId || queryId,
         errorMessage
       );
 

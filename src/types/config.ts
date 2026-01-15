@@ -38,9 +38,26 @@ export interface DiscoveryConfig {
   maxGraphDepth?: number; // for dependency traversal
 }
 
+/**
+ * Logger instance interface
+ * Compatible with Winston, Pino, Bunyan, and most logging libraries
+ */
+export interface LoggerInstance {
+  log?: (message: string, ...meta: any[]) => void;
+  info?: (message: string, ...meta: any[]) => void;
+  warn?: (message: string, ...meta: any[]) => void;
+  error?: (message: string, ...meta: any[]) => void;
+  debug?: (message: string, ...meta: any[]) => void;
+}
+
 export interface LoggingConfig {
   level?: 'debug' | 'info' | 'warn' | 'error' | 'none';
-  logger?: (level: string, message: string, meta?: any) => void;
+  /**
+   * Logger can be either:
+   * 1. A logger instance with methods (Winston, Pino, etc.)
+   * 2. A custom logging function
+   */
+  logger?: LoggerInstance | ((level: string, message: string, meta?: any) => void);
 }
 
 export interface CaseConversionConfig {
@@ -79,11 +96,28 @@ export const DEFAULT_DISCOVERY_CONFIG: Required<DiscoveryConfig> = {
 
 export const DEFAULT_LOGGING_CONFIG: Required<LoggingConfig> = {
   level: 'info',
-  logger: (level: string, message: string, meta?: any) => {
-    const timestamp = new Date().toISOString();
-    const metaStr = meta ? ` ${JSON.stringify(meta)}` : '';
-    console.log(`[${timestamp}] [${level.toUpperCase()}] ${message}${metaStr}`);
-  },
+  logger: {
+    info: (message: string, ...meta: any[]) => {
+      const timestamp = new Date().toISOString();
+      const metaStr = meta.length > 0 ? ` ${JSON.stringify(meta[0])}` : '';
+      console.log(`[${timestamp}] [INFO] ${message}${metaStr}`);
+    },
+    error: (message: string, ...meta: any[]) => {
+      const timestamp = new Date().toISOString();
+      const metaStr = meta.length > 0 ? ` ${JSON.stringify(meta[0])}` : '';
+      console.error(`[${timestamp}] [ERROR] ${message}${metaStr}`);
+    },
+    warn: (message: string, ...meta: any[]) => {
+      const timestamp = new Date().toISOString();
+      const metaStr = meta.length > 0 ? ` ${JSON.stringify(meta[0])}` : '';
+      console.warn(`[${timestamp}] [WARN] ${message}${metaStr}`);
+    },
+    debug: (message: string, ...meta: any[]) => {
+      const timestamp = new Date().toISOString();
+      const metaStr = meta.length > 0 ? ` ${JSON.stringify(meta[0])}` : '';
+      console.log(`[${timestamp}] [DEBUG] ${message}${metaStr}`);
+    },
+  } as LoggerInstance,
 };
 
 export const DEFAULT_WARMING_CONFIG: Required<WarmingConfig> = {

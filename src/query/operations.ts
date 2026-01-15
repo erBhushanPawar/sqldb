@@ -65,8 +65,19 @@ export class TableOperationsImpl<T = any> implements TableOperations<T> {
     const startTime = Date.now();
     let results: T[];
 
+    // Smart limit: Automatically cap large queries with relations for performance
+    const effectiveOptions = { ...options };
+    if (withRelations && !effectiveOptions.limit) {
+      // No limit specified but relations requested - apply smart default
+      effectiveOptions.limit = 1000;
+      console.warn(
+        `[Performance] Auto-limiting query to 1000 records (withRelations=true but no limit specified). ` +
+        `Specify limit explicitly to override or use pagination for larger datasets.`
+      );
+    }
+
     // Build cache key (exclude correlationId, skipCache, and withRelations from key as they don't affect the base query result)
-    const { correlationId: _, skipCache: __, withRelations: ___, ...cacheableOptions } = options || {};
+    const { correlationId: _, skipCache: __, withRelations: ___, ...cacheableOptions } = effectiveOptions || {};
     const cacheKey = this.cacheManager
       .getKeyBuilder()
       .buildKey(this.tableName, 'findMany', { where, options: cacheableOptions });
@@ -106,7 +117,7 @@ export class TableOperationsImpl<T = any> implements TableOperations<T> {
     const { sql, params } = this.queryBuilder.buildSelect(
       this.tableName,
       where,
-      options
+      effectiveOptions
     );
 
     results = await this.dbManager.query<T[]>(sql, params, correlationId);
@@ -497,6 +508,18 @@ export class TableOperationsImpl<T = any> implements TableOperations<T> {
       return records;
     }
 
+    const relationStartTime = Date.now();
+    const recordCount = records.length;
+
+    // Performance warning for large result sets with relations
+    if (recordCount > 1000) {
+      console.warn(
+        `[Performance Warning] Loading relations for ${recordCount} records. ` +
+        `Consider adding pagination (limit/offset) to your query for better performance. ` +
+        `Target: <1000 records per query.`
+      );
+    }
+
     const dependencyGraph = this.invalidationManager['dependencyGraph'];
 
     // Parse relation config
@@ -549,15 +572,40 @@ export class TableOperationsImpl<T = any> implements TableOperations<T> {
             this.cacheConfig
           );
 
-          // Group records by their PK value and fetch related data for each
+          // Collect all unique PK values to batch the query
+          const pkValues = new Set<any>();
           for (const record of enrichedRecords) {
             const pkValue = (record as any)[rel.toColumn];
             if (pkValue !== undefined && pkValue !== null) {
-              const whereClause = { [rel.fromColumn]: pkValue };
-              const relatedData = await relatedOps.findMany(whereClause, { correlationId, limit: 100 });
+              pkValues.add(pkValue);
+            }
+          }
 
-              // Attach related data to the record
-              (record as any)[rel.fromTable] = relatedData;
+          // Skip if no valid PK values
+          if (pkValues.size === 0) {
+            continue;
+          }
+
+          // Fetch all related records in a single batched query using IN clause
+          const pkArray = Array.from(pkValues);
+          const whereClause = { [rel.fromColumn]: pkArray };
+          const relatedData = await relatedOps.findMany(whereClause as any, { correlationId });
+
+          // Group related data by the foreign key value
+          const relatedDataMap = new Map<any, any[]>();
+          for (const relatedRecord of relatedData) {
+            const fkValue = (relatedRecord as any)[rel.fromColumn];
+            if (!relatedDataMap.has(fkValue)) {
+              relatedDataMap.set(fkValue, []);
+            }
+            relatedDataMap.get(fkValue)!.push(relatedRecord);
+          }
+
+          // Attach related data to each record
+          for (const record of enrichedRecords) {
+            const pkValue = (record as any)[rel.toColumn];
+            if (pkValue !== undefined && pkValue !== null) {
+              (record as any)[rel.fromTable] = relatedDataMap.get(pkValue) || [];
             }
           }
         } catch (error) {
@@ -595,13 +643,24 @@ export class TableOperationsImpl<T = any> implements TableOperations<T> {
             }
           }
 
-          // Fetch all related records in batch
+          // Skip if no valid FK values
+          if (fkValues.size === 0) {
+            continue;
+          }
+
+          // CRITICAL FIX: Fetch all related records in a SINGLE batched query using IN clause
+          // instead of one query per FK value (which causes N+1 problem)
+          const fkArray = Array.from(fkValues);
+          const whereClause = { [rel.toColumn]: fkArray };
+          const relatedData = await relatedOps.findMany(whereClause as any, { correlationId });
+
+          // Build a map for quick lookup
           const relatedDataMap = new Map<any, any>();
-          for (const fkValue of fkValues) {
-            const whereClause = { [rel.toColumn]: fkValue };
-            const relatedData = await relatedOps.findMany(whereClause, { correlationId, limit: 100 });
-            if (relatedData.length > 0) {
-              relatedDataMap.set(fkValue, relatedData[0]); // Use first match for 1-to-1 relations
+          for (const relatedRecord of relatedData) {
+            const pkValue = (relatedRecord as any)[rel.toColumn];
+            // Store by PK value for O(1) lookup
+            if (pkValue !== undefined && pkValue !== null) {
+              relatedDataMap.set(pkValue, relatedRecord);
             }
           }
 
@@ -619,6 +678,23 @@ export class TableOperationsImpl<T = any> implements TableOperations<T> {
           console.warn(`Failed to fetch dependency table ${rel.toTable}:`, error);
         }
       }
+    }
+
+    // Performance logging
+    const relationEndTime = Date.now();
+    const relationLoadTime = relationEndTime - relationStartTime;
+
+    if (relationLoadTime > 1000) {
+      console.warn(
+        `[Performance] Relation loading took ${relationLoadTime}ms for ${recordCount} records. ` +
+        `Consider optimizing your query or reducing the result set size.`
+      );
+    } else if (recordCount > 100) {
+      // Log successful fast queries for large datasets
+      console.log(
+        `[Performance] Successfully loaded relations for ${recordCount} records in ${relationLoadTime}ms ` +
+        `(${(relationLoadTime / recordCount).toFixed(2)}ms per record)`
+      );
     }
 
     return enrichedRecords;

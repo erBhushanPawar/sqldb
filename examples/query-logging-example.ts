@@ -28,7 +28,6 @@ async function queryLoggingExample() {
       password: dbConfig.password,
       database: dbConfig.database,
       connectionLimit: 10,
-      logging: true, // Enable query logging
     },
     redis: {
       host: process.env.REDIS_HOST || 'localhost',
@@ -42,7 +41,7 @@ async function queryLoggingExample() {
       autoDiscover: true,
     },
     logging: {
-      level: 'info',
+      level: 'info', // Enable query logging at root config level
     },
   });
 
